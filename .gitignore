@@ -1,0 +1,5 @@
+/.direnv
+/.gradle
+/.pre-commit-config.yaml
+/app/build
+/result
