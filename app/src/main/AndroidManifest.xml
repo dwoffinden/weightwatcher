@@ -33,7 +33,7 @@
         </activity-alias>
 
         <receiver
-            android:name=".WeightWidgetProvider"
+            android:name=".WeightGlanceWidgetReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

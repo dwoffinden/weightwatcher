@@ -1,7 +1,6 @@
 package dev.daw.weightwatcher
 
 import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Bundle
@@ -31,6 +30,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.datastore.preferences.core.preferencesOf
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
@@ -68,7 +70,15 @@ class MainActivity : ComponentActivity() {
           if (hasPermissions) {
             Log.i("MainActivity", "All permissions granted! Enqueuing sync...")
             // Immediate visual update to fix widget click behavior
-            WeightWidgetProvider.updateAppWidget(this@MainActivity, null, true)
+            coroutineScope.launch {
+              val manager = GlanceAppWidgetManager(this@MainActivity)
+              val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
+              glanceIds.forEach { glanceId ->
+                updateAppWidgetState(this@MainActivity, glanceId) {
+                  it.toMutablePreferences().clear()
+                }
+              }
+            }
             WeightWorker.enqueueOneTimeWork(this@MainActivity)
           }
         }
@@ -146,23 +156,24 @@ class MainActivity : ComponentActivity() {
             if (appWidgetManager.isRequestPinAppWidgetSupported) {
               Button(
                   onClick = {
-                    val componentName =
-                        ComponentName(this@MainActivity, WeightWidgetProvider::class.java)
-                    val staleness =
-                        lastWeightTime?.let { time ->
-                          Duration.between(time, Instant.now()).toHours()
-                        }
-                    val preview =
-                        WeightWidgetProvider.createRemoteViews(
-                            this@MainActivity,
-                            staleness,
-                            true,
-                        )
-                    val extras =
-                        Bundle().apply {
-                          putParcelable(AppWidgetManager.EXTRA_APPWIDGET_PREVIEW, preview)
-                        }
-                    appWidgetManager.requestPinAppWidget(componentName, extras, null)
+                    coroutineScope.launch {
+                      val manager = GlanceAppWidgetManager(this@MainActivity)
+                      val staleness =
+                          lastWeightTime?.let { time ->
+                            Duration.between(time, Instant.now()).toHours()
+                          }
+
+                      manager.requestPinGlanceAppWidget(
+                          receiver = WeightGlanceWidgetReceiver::class.java,
+                          preview = WeightGlanceWidget(),
+                          previewState =
+                              if (staleness != null) {
+                                preferencesOf(WeightGlanceWidget.KEY_HOURS_STALE to staleness)
+                              } else {
+                                preferencesOf()
+                              },
+                      )
+                    }
                   },
                   modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
               ) {

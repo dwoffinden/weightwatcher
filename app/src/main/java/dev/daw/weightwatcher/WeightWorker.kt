@@ -2,6 +2,10 @@ package dev.daw.weightwatcher
 
 import android.content.Context
 import android.util.Log
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.appwidget.updateAll
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.WeightRecord
@@ -31,7 +35,7 @@ class WeightWorker(appContext: Context, workerParams: WorkerParameters) :
 
     if (!granted.containsAll(permissions)) {
       Log.i("WeightWorker", "Permissions not granted, updating widget to Auth state")
-      WeightWidgetProvider.updateAppWidget(applicationContext, null, hasPermissions = false)
+      updateGlanceWidget(applicationContext, null, hasPermissions = false)
       return Result.success()
     }
 
@@ -100,10 +104,10 @@ class WeightWorker(appContext: Context, workerParams: WorkerParameters) :
       if (lastWeightTimeInstant != null) {
         val hoursStale = Duration.between(lastWeightTimeInstant, Instant.now()).toHours()
         Log.i("WeightWorker", "Latest weight is $hoursStale hours stale")
-        WeightWidgetProvider.updateAppWidget(applicationContext, hoursStale, hasPermissions = true)
+        updateGlanceWidget(applicationContext, hoursStale, hasPermissions = true)
       } else {
         Log.i("WeightWorker", "No weight records found, updating widget to default state")
-        WeightWidgetProvider.updateAppWidget(applicationContext, null, hasPermissions = true)
+        updateGlanceWidget(applicationContext, null, hasPermissions = true)
       }
 
       return Result.success()
@@ -117,6 +121,26 @@ class WeightWorker(appContext: Context, workerParams: WorkerParameters) :
       Log.e("WeightWorker", "Error updating weight: ${e.message}", e)
       return Result.retry()
     }
+  }
+
+  private suspend fun updateGlanceWidget(
+      context: Context,
+      hoursStale: Long?,
+      hasPermissions: Boolean,
+  ) {
+    val manager = GlanceAppWidgetManager(context)
+    val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
+    glanceIds.forEach { glanceId ->
+      updateAppWidgetState(context, glanceId) { prefs: MutablePreferences ->
+        if (hoursStale != null) {
+          prefs[WeightGlanceWidget.KEY_HOURS_STALE] = hoursStale
+        } else {
+          prefs.remove(WeightGlanceWidget.KEY_HOURS_STALE)
+        }
+        prefs[WeightGlanceWidget.KEY_HAS_PERMISSIONS] = hasPermissions
+      }
+    }
+    WeightGlanceWidget().updateAll(context)
   }
 
   companion object {
