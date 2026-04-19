@@ -36,6 +36,14 @@
           systemImageTypes = [ "google_apis_playstore" ];
         };
         androidSdk = androidComposition.androidsdk;
+        # Minimal SDK for CI: no emulator, no system images, no ABI splits.
+        ciAndroidComposition = pkgs.androidenv.composeAndroidPackages {
+          buildToolsVersions = [ "36.0.0" ];
+          platformVersions = [ "36" ];
+          includeEmulator = false;
+          includeSystemImages = false;
+        };
+        ciAndroidSdk = ciAndroidComposition.androidsdk;
         emulator-run = pkgs.writeShellScriptBin "emulator-run" ''
           set -e
           AVD_NAME="weightwatcher"
@@ -84,6 +92,19 @@
             ${pre-commit-check.shellHook}
             export ANDROID_HOME="${androidSdk}/libexec/android-sdk"
             export ANDROID_SDK_ROOT="${androidSdk}/libexec/android-sdk"
+            export JAVA_HOME="${jdk}/lib/openjdk"
+          '';
+        };
+        # Minimal shell for CI: skips emulator, system images, and dev tooling.
+        devShells.ci = pkgs.mkShell {
+          packages = [
+            ciAndroidSdk
+            jdk
+            (pkgs.gradle_9.override { java = jdk; })
+          ];
+          shellHook = ''
+            export ANDROID_HOME="${ciAndroidSdk}/libexec/android-sdk"
+            export ANDROID_SDK_ROOT="${ciAndroidSdk}/libexec/android-sdk"
             export JAVA_HOME="${jdk}/lib/openjdk"
           '';
         };
