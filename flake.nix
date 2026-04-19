@@ -78,7 +78,7 @@
             };
           };
         };
-        jdk = pkgs.jdk25;
+        jdk = pkgs.jdk25_headless;
         # gradle.properties is generated into the Nix store and symlinked at
         # shell entry so Gradle sees the correct SDK and JDK store paths.
         gradleProperties = pkgs.writeText "gradle.properties" ''
