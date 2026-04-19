@@ -1,6 +1,7 @@
 package dev.daw.weightwatcher
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -20,27 +21,34 @@ class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    Log.i("MainActivity", "onCreate called")
     setContent { WeightWatcherApp() }
   }
 
   @Composable
   fun WeightWatcherApp() {
     val healthConnectClient = HealthConnectClient.getOrCreate(this)
+    val sdkStatus = HealthConnectClient.getSdkStatus(this)
+    Log.i("MainActivity", "Health Connect SDK Status: $sdkStatus")
     var hasPermissions by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
-
-    val permissions = setOf(HealthPermission.getReadPermission(WeightRecord::class))
 
     val requestPermissionActivityContract =
         PermissionController.createRequestPermissionResultContract()
     val requestPermissions =
         rememberLauncherForActivityResult(requestPermissionActivityContract) { granted ->
-          hasPermissions = granted.containsAll(permissions)
+          Log.i("MainActivity", "Permissions request result: $granted")
+          hasPermissions = granted.containsAll(PERMISSIONS)
+          if (hasPermissions) {
+            Log.i("MainActivity", "All permissions granted! Enqueuing sync...")
+            WeightWorker.enqueueOneTimeWork(this@MainActivity)
+          }
         }
 
     LaunchedEffect(Unit) {
       val granted = healthConnectClient.permissionController.getGrantedPermissions()
-      hasPermissions = granted.containsAll(permissions)
+      hasPermissions = granted.containsAll(PERMISSIONS)
+      Log.i("MainActivity", "Initial permissions check: $hasPermissions")
       if (hasPermissions) {
         // Enqueue worker
         WeightWorker.enqueuePeriodicWork(this@MainActivity)
@@ -57,14 +65,34 @@ class MainActivity : ComponentActivity() {
           Text("WeightWatcher Widget Setup", style = MaterialTheme.typography.headlineMedium)
           Spacer(modifier = Modifier.height(32.dp))
 
-          if (hasPermissions) {
+          if (sdkStatus != HealthConnectClient.SDK_AVAILABLE) {
+            val errorMessage =
+                when (sdkStatus) {
+                  HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
+                      "Health Connect is not installed. Please install it from the Play Store."
+                  HealthConnectClient.SDK_UNAVAILABLE ->
+                      "Health Connect is not supported on this device."
+                  else -> "Health Connect status: $sdkStatus"
+                }
+            Text(errorMessage, color = MaterialTheme.colorScheme.error)
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = { /* Open Play Store? */ }) { Text("Check Health Connect") }
+          } else if (hasPermissions) {
             Text("Permissions granted! 😊")
             Spacer(modifier = Modifier.height(16.dp))
             Text("You can now add the widget to your home screen.")
           } else {
             Text("Need Health Connect read permissions for weight.")
             Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { requestPermissions.launch(permissions) }) {
+            Button(
+                onClick = {
+                  Log.i(
+                      "MainActivity",
+                      "Grant Permissions button clicked. Requesting: $PERMISSIONS",
+                  )
+                  requestPermissions.launch(PERMISSIONS)
+                }
+            ) {
               Text("Grant Permissions")
             }
           }
@@ -72,11 +100,20 @@ class MainActivity : ComponentActivity() {
       }
     }
   }
+
+  companion object {
+    val PERMISSIONS =
+        setOf(
+            HealthPermission.getReadPermission(WeightRecord::class),
+            HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
+        )
+  }
 }
 
 class PermissionsRationaleActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    Log.i("PermissionsRationaleActivity", "onCreate called")
     setContent {
       MaterialTheme {
         Text(

@@ -11,6 +11,7 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -29,9 +30,12 @@ class WeightWorker(appContext: Context, workerParams: WorkerParameters) :
     val granted = healthConnectClient.permissionController.getGrantedPermissions()
 
     if (!granted.containsAll(permissions)) {
+      Log.i("WeightWorker", "Permissions not granted, updating widget to Auth state")
       WeightWidgetProvider.updateAppWidget(applicationContext, null, hasPermissions = false)
-      return Result.failure()
+      return Result.success()
     }
+
+    Log.i("WeightWorker", "Starting Health Connect sync")
 
     val prefs = applicationContext.getSharedPreferences("weight_prefs", Context.MODE_PRIVATE)
     var changesToken = prefs.getString("changes_token", null)
@@ -60,15 +64,21 @@ class WeightWorker(appContext: Context, workerParams: WorkerParameters) :
             )
         if (response.records.isNotEmpty()) {
           lastWeightTimeInstant = response.records.first().time
+          Log.i("WeightWorker", "Initial load found record at $lastWeightTimeInstant")
+        } else {
+          Log.i("WeightWorker", "Initial load found no weight records")
         }
       } else {
         // We have a token, fetch changelog
         val changesResponse = healthConnectClient.getChanges(changesToken)
         if (changesResponse.changesTokenExpired) {
+          Log.i("WeightWorker", "Changes token expired, clearing and retrying")
           // Token expired, clear it and retry on next run
           prefs.edit().remove("changes_token").apply()
           return Result.retry()
         }
+
+        Log.i("WeightWorker", "Fetched ${changesResponse.changes.size} changes")
 
         lastWeightTimeInstant =
             getLatestWeightTimeFromChanges(changesResponse.changes, lastWeightTimeInstant)
@@ -89,14 +99,22 @@ class WeightWorker(appContext: Context, workerParams: WorkerParameters) :
       // Update UI
       if (lastWeightTimeInstant != null) {
         val hoursStale = Duration.between(lastWeightTimeInstant, Instant.now()).toHours()
+        Log.i("WeightWorker", "Latest weight is $hoursStale hours stale")
         WeightWidgetProvider.updateAppWidget(applicationContext, hoursStale, hasPermissions = true)
       } else {
+        Log.i("WeightWorker", "No weight records found, updating widget to default state")
         WeightWidgetProvider.updateAppWidget(applicationContext, null, hasPermissions = true)
       }
 
       return Result.success()
+    } catch (e: SecurityException) {
+      Log.e(
+          "WeightWorker",
+          "SecurityException: Missing permissions for background read? ${e.message}",
+      )
+      return Result.retry()
     } catch (e: Exception) {
-      Log.e("WeightWorker", "Error updating weight", e)
+      Log.e("WeightWorker", "Error updating weight: ${e.message}", e)
       return Result.retry()
     }
   }
@@ -122,7 +140,12 @@ class WeightWorker(appContext: Context, workerParams: WorkerParameters) :
 
     fun enqueueOneTimeWork(context: Context) {
       val request = OneTimeWorkRequestBuilder<WeightWorker>().build()
-      WorkManager.getInstance(context).enqueue(request)
+      WorkManager.getInstance(context)
+          .enqueueUniqueWork(
+              "WeightOneTimeSync",
+              ExistingWorkPolicy.KEEP,
+              request,
+          )
     }
 
     fun getLatestWeightTimeFromChanges(
