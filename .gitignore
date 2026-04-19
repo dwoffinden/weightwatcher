@@ -1,5 +1,7 @@
 /.direnv
 /.gradle
 /.pre-commit-config.yaml
+/.kotlin
+/build
 /app/build
 /result
