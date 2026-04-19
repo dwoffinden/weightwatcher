@@ -24,9 +24,11 @@
             android_sdk.accept_license = true;
           };
         };
+        buildToolsVersion = "36.0.0";
+        platformVersion = "36";
         androidComposition = pkgs.androidenv.composeAndroidPackages {
-          buildToolsVersions = [ "36.0.0" ];
-          platformVersions = [ "36" ];
+          buildToolsVersions = [ buildToolsVersion ];
+          platformVersions = [ platformVersion ];
           abiVersions = [
             "x86_64"
             "arm64-v8a"
@@ -38,8 +40,8 @@
         androidSdk = androidComposition.androidsdk;
         # Minimal SDK for CI: no emulator, no system images, no ABI splits.
         ciAndroidComposition = pkgs.androidenv.composeAndroidPackages {
-          buildToolsVersions = [ "36.0.0" ];
-          platformVersions = [ "36" ];
+          buildToolsVersions = [ buildToolsVersion ];
+          platformVersions = [ platformVersion ];
           includeEmulator = false;
           includeSystemImages = false;
         };
@@ -47,7 +49,7 @@
         emulator-run = pkgs.writeShellScriptBin "emulator-run" ''
           set -e
           AVD_NAME="weightwatcher"
-          TARGET_IMAGE="system-images;android-36;google_apis_playstore;x86_64"
+          TARGET_IMAGE="system-images;android-${platformVersion};google_apis_playstore;x86_64"
 
           # Check if the AVD exists and is healthy
           AVD_INFO=$(avdmanager list avd)
@@ -77,6 +79,18 @@
           };
         };
         jdk = pkgs.jdk25;
+        # gradle.properties is generated into the Nix store and symlinked at
+        # shell entry so Gradle sees the correct SDK and JDK store paths.
+        gradleProperties = pkgs.writeText "gradle.properties" ''
+          android.useAndroidX=true
+          android.aapt2FromMavenOverride=${androidSdk}/libexec/android-sdk/build-tools/${buildToolsVersion}/aapt2
+          org.gradle.java.home=${jdk}/lib/openjdk
+        '';
+        ciGradleProperties = pkgs.writeText "gradle.properties" ''
+          android.useAndroidX=true
+          android.aapt2FromMavenOverride=${ciAndroidSdk}/libexec/android-sdk/build-tools/${buildToolsVersion}/aapt2
+          org.gradle.java.home=${jdk}/lib/openjdk
+        '';
       in
       {
         devShells.default = pkgs.mkShell {
@@ -93,6 +107,7 @@
             export ANDROID_HOME="${androidSdk}/libexec/android-sdk"
             export ANDROID_SDK_ROOT="${androidSdk}/libexec/android-sdk"
             export JAVA_HOME="${jdk}/lib/openjdk"
+            ln -sf ${gradleProperties} gradle.properties
           '';
         };
         # Minimal shell for CI: skips emulator, system images, and dev tooling.
@@ -106,6 +121,7 @@
             export ANDROID_HOME="${ciAndroidSdk}/libexec/android-sdk"
             export ANDROID_SDK_ROOT="${ciAndroidSdk}/libexec/android-sdk"
             export JAVA_HOME="${jdk}/lib/openjdk"
+            ln -sf ${ciGradleProperties} gradle.properties
           '';
         };
       }
