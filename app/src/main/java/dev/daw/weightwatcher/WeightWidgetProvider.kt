@@ -70,8 +70,8 @@ class WeightWidgetProvider : AppWidgetProvider() {
         views.setTextViewText(R.id.staleness_text, "Auth")
         views.setImageViewResource(R.id.status_icon, android.R.drawable.ic_dialog_alert)
       } else if (hoursStale == null) {
-        views.setTextViewText(R.id.staleness_text, "--h")
-        views.setImageViewResource(R.id.status_icon, android.R.drawable.ic_popup_sync)
+        views.setTextViewText(R.id.staleness_text, "None")
+        views.setImageViewResource(R.id.status_icon, android.R.drawable.ic_menu_help)
       } else {
         views.setTextViewText(R.id.staleness_text, "${hoursStale}h")
         if (hoursStale <= 20) {

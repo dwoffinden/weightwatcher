@@ -41,6 +41,8 @@ class MainActivity : ComponentActivity() {
           hasPermissions = granted.containsAll(PERMISSIONS)
           if (hasPermissions) {
             Log.i("MainActivity", "All permissions granted! Enqueuing sync...")
+            // Immediate visual update to fix widget click behavior
+            WeightWidgetProvider.updateAppWidget(this@MainActivity, null, true)
             WeightWorker.enqueueOneTimeWork(this@MainActivity)
           }
         }
