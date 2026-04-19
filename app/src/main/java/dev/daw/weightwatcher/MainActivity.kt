@@ -2,6 +2,8 @@ package dev.daw.weightwatcher
 
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -17,6 +19,10 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.WeightRecord
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -33,6 +39,7 @@ class MainActivity : ComponentActivity() {
     val sdkStatus = HealthConnectClient.getSdkStatus(this)
     Log.i("MainActivity", "Health Connect SDK Status: $sdkStatus")
     var hasPermissions by remember { mutableStateOf(false) }
+    var lastWeightTime by remember { mutableStateOf<Instant?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
     val requestPermissionActivityContract =
@@ -57,6 +64,24 @@ class MainActivity : ComponentActivity() {
         // Enqueue worker
         WeightWorker.enqueuePeriodicWork(this@MainActivity)
       }
+    }
+
+    DisposableEffect(Unit) {
+      val prefs = getSharedPreferences("weight_prefs", Context.MODE_PRIVATE)
+      val listener =
+          SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+            if (key == "last_weight_time") {
+              val lastTimeStr = p.getString("last_weight_time", null)
+              lastWeightTime = if (lastTimeStr != null) Instant.parse(lastTimeStr) else null
+            }
+          }
+
+      // Initial value
+      val initialValue = prefs.getString("last_weight_time", null)
+      lastWeightTime = if (initialValue != null) Instant.parse(initialValue) else null
+
+      prefs.registerOnSharedPreferenceChangeListener(listener)
+      onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
     MaterialTheme {
@@ -84,6 +109,19 @@ class MainActivity : ComponentActivity() {
           } else if (hasPermissions) {
             Text("Permissions granted! 😊")
             Spacer(modifier = Modifier.height(16.dp))
+
+            lastWeightTime?.let { time ->
+              val formatter =
+                  DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+                      .withZone(ZoneId.systemDefault())
+              Text(
+                  "Last weight log found: ${formatter.format(time)}",
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.secondary,
+              )
+              Spacer(modifier = Modifier.height(16.dp))
+            }
+
             Text("You can now add the widget to your home screen.")
             Spacer(modifier = Modifier.height(24.dp))
 
