@@ -59,7 +59,7 @@ class WeightWidgetProvider : AppWidgetProvider() {
       }
     }
 
-    private fun createRemoteViews(
+    fun createRemoteViews(
         context: Context,
         hoursStale: Long?,
         hasPermissions: Boolean,

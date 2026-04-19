@@ -19,6 +19,7 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.WeightRecord
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -131,7 +132,21 @@ class MainActivity : ComponentActivity() {
                   onClick = {
                     val componentName =
                         ComponentName(this@MainActivity, WeightWidgetProvider::class.java)
-                    appWidgetManager.requestPinAppWidget(componentName, null, null)
+                    val staleness =
+                        lastWeightTime?.let { time ->
+                          Duration.between(time, Instant.now()).toHours()
+                        }
+                    val preview =
+                        WeightWidgetProvider.createRemoteViews(
+                            this@MainActivity,
+                            staleness,
+                            true,
+                        )
+                    val extras =
+                        Bundle().apply {
+                          putParcelable(AppWidgetManager.EXTRA_APPWIDGET_PREVIEW, preview)
+                        }
+                    appWidgetManager.requestPinAppWidget(componentName, extras, null)
                   },
                   modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
               ) {
