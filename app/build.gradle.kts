@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -12,8 +13,8 @@ android {
         applicationId = "dev.daw.weightwatcher"
         minSdk = 34
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
     }
 
     buildFeatures {
@@ -28,14 +29,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
-    }
-
-    kotlinOptions {
-        jvmTarget = "21"
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.11" // Compatible with Kotlin 1.9.23
     }
 }
 
