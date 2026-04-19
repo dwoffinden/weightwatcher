@@ -48,7 +48,7 @@ dependencies {
     implementation("androidx.health.connect:connect-client:1.2.0-alpha03")
 
     // WorkManager
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
