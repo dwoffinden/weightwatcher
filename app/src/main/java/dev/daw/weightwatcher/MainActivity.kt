@@ -1,5 +1,7 @@
 package dev.daw.weightwatcher
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -83,6 +85,21 @@ class MainActivity : ComponentActivity() {
             Text("Permissions granted! 😊")
             Spacer(modifier = Modifier.height(16.dp))
             Text("You can now add the widget to your home screen.")
+            Spacer(modifier = Modifier.height(24.dp))
+
+            val appWidgetManager = AppWidgetManager.getInstance(this@MainActivity)
+            if (appWidgetManager.isRequestPinAppWidgetSupported) {
+              Button(
+                  onClick = {
+                    val componentName =
+                        ComponentName(this@MainActivity, WeightWidgetProvider::class.java)
+                    appWidgetManager.requestPinAppWidget(componentName, null, null)
+                  },
+                  modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+              ) {
+                Text("Pin Widget to Home Screen")
+              }
+            }
           } else {
             Text("Need Health Connect read permissions for weight.")
             Spacer(modifier = Modifier.height(16.dp))
