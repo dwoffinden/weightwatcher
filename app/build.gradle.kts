@@ -5,13 +5,13 @@ plugins {
 
 android {
     namespace = "dev.daw.weightwatcher"
-    compileSdk = 35
-    buildToolsVersion = "35.0.0"
+    compileSdk = 36
+    buildToolsVersion = "36.0.0"
 
     defaultConfig {
         applicationId = "dev.daw.weightwatcher"
-        minSdk = 28
-        targetSdk = 35
+        minSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
     }

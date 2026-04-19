@@ -25,8 +25,8 @@
           };
         };
         androidComposition = pkgs.androidenv.composeAndroidPackages {
-          buildToolsVersions = [ "35.0.0" ];
-          platformVersions = [ "35" ];
+          buildToolsVersions = [ "36.0.0" ];
+          platformVersions = [ "36" ];
           abiVersions = [
             "x86_64"
             "arm64-v8a"
@@ -39,9 +39,20 @@
         emulator-run = pkgs.writeShellScriptBin "emulator-run" ''
           set -e
           AVD_NAME="weightwatcher"
+          TARGET_IMAGE="system-images;android-36;google_apis_playstore;x86_64"
+
+          # Check if the AVD exists and is healthy
+          AVD_INFO=$(avdmanager list avd)
+          if echo "$AVD_INFO" | grep -q "Name: $AVD_NAME"; then
+            if echo "$AVD_INFO" | grep -A 5 "Name: $AVD_NAME" | grep -q "Error:"; then
+              echo "AVD $AVD_NAME is broken or missing system image. Deleting..."
+              avdmanager delete avd -n "$AVD_NAME"
+            fi
+          fi
+
           if ! emulator -list-avds | grep -q "^$AVD_NAME$"; then
             echo "Creating AVD: $AVD_NAME"
-            echo "no" | avdmanager create avd -n "$AVD_NAME" -k "system-images;android-35;google_apis_playstore;x86_64" --force
+            echo "no" | avdmanager create avd -n "$AVD_NAME" -k "$TARGET_IMAGE" --force
           fi
           echo "Starting emulator: $AVD_NAME"
           emulator -avd "$AVD_NAME"
