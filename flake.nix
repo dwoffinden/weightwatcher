@@ -85,11 +85,19 @@
           android.useAndroidX=true
           android.aapt2FromMavenOverride=${androidSdk}/libexec/android-sdk/build-tools/${buildToolsVersion}/aapt2
           org.gradle.java.home=${jdk}/lib/openjdk
+          org.gradle.jvmargs=-Xmx4096m -XX:+HeapDumpOnOutOfMemoryError
+          org.gradle.daemon=true
+          org.gradle.parallel=true
+          org.gradle.configureondemand=true
         '';
         ciGradleProperties = pkgs.writeText "gradle.properties" ''
           android.useAndroidX=true
           android.aapt2FromMavenOverride=${ciAndroidSdk}/libexec/android-sdk/build-tools/${buildToolsVersion}/aapt2
           org.gradle.java.home=${jdk}/lib/openjdk
+          org.gradle.jvmargs=-Xmx4096m -XX:+HeapDumpOnOutOfMemoryError
+          org.gradle.daemon=true
+          org.gradle.parallel=true
+          org.gradle.configureondemand=true
         '';
       in
       {
