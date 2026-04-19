@@ -75,7 +75,7 @@
           packages = [
             androidSdk
             jdk
-            (pkgs.gradle.override { java = jdk; })
+            (pkgs.gradle_9.override { java = jdk; })
             emulator-run
             pkgs.ktfmt
             pkgs.kotlin-language-server
