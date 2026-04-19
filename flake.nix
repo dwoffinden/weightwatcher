@@ -24,8 +24,8 @@
             android_sdk.accept_license = true;
           };
         };
-        buildToolsVersion = "36.0.0";
-        platformVersion = "36";
+        buildToolsVersion = "37.0.0";
+        platformVersion = "37";
         androidComposition = pkgs.androidenv.composeAndroidPackages {
           buildToolsVersions = [ buildToolsVersion ];
           platformVersions = [ platformVersion ];
