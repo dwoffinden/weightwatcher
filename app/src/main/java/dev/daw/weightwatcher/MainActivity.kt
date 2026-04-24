@@ -1,8 +1,6 @@
 package dev.daw.weightwatcher
 
 import android.appwidget.AppWidgetManager
-import android.content.Context
-import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -20,8 +18,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,8 +33,6 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
-import androidx.health.connect.client.permission.HealthPermission
-import androidx.health.connect.client.records.WeightRecord
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -58,7 +54,8 @@ class MainActivity : ComponentActivity() {
     val sdkStatus = HealthConnectClient.getSdkStatus(this)
     Log.i("MainActivity", "Health Connect SDK Status: $sdkStatus")
     var hasPermissions by remember { mutableStateOf(false) }
-    var lastWeightTime by remember { mutableStateOf<Instant?>(null) }
+    val syncManager = remember { SyncManager(this) }
+    val lastWeightTime by syncManager.lastWeightTime.collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
 
     val requestPermissionActivityContract =
@@ -66,7 +63,7 @@ class MainActivity : ComponentActivity() {
     val requestPermissions =
         rememberLauncherForActivityResult(requestPermissionActivityContract) { granted ->
           Log.i("MainActivity", "Permissions request result: $granted")
-          hasPermissions = granted.containsAll(PERMISSIONS)
+          hasPermissions = granted.containsAll(SyncManager.REQUIRED_PERMISSIONS)
           if (hasPermissions) {
             Log.i("MainActivity", "All permissions granted! Enqueuing sync...")
             // Immediate visual update to fix widget click behavior
@@ -85,7 +82,7 @@ class MainActivity : ComponentActivity() {
 
     LaunchedEffect(Unit) {
       val granted = healthConnectClient.permissionController.getGrantedPermissions()
-      hasPermissions = granted.containsAll(PERMISSIONS)
+      hasPermissions = granted.containsAll(SyncManager.REQUIRED_PERMISSIONS)
       Log.i("MainActivity", "Initial permissions check: $hasPermissions")
       if (hasPermissions) {
         // Enqueue worker
@@ -93,23 +90,7 @@ class MainActivity : ComponentActivity() {
       }
     }
 
-    DisposableEffect(Unit) {
-      val prefs = getSharedPreferences("weight_prefs", Context.MODE_PRIVATE)
-      val listener =
-          SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
-            if (key == "last_weight_time") {
-              val lastTimeStr = p.getString("last_weight_time", null)
-              lastWeightTime = if (lastTimeStr != null) Instant.parse(lastTimeStr) else null
-            }
-          }
-
-      // Initial value
-      val initialValue = prefs.getString("last_weight_time", null)
-      lastWeightTime = if (initialValue != null) Instant.parse(initialValue) else null
-
-      prefs.registerOnSharedPreferenceChangeListener(listener)
-      onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
+    // SharedPreferences listener logic removed in favor of SyncManager's lastWeightTime Flow
 
     MaterialTheme {
       Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -187,9 +168,9 @@ class MainActivity : ComponentActivity() {
                 onClick = {
                   Log.i(
                       "MainActivity",
-                      "Grant Permissions button clicked. Requesting: $PERMISSIONS",
+                      "Grant Permissions button clicked. Requesting: ${SyncManager.REQUIRED_PERMISSIONS}",
                   )
-                  requestPermissions.launch(PERMISSIONS)
+                  requestPermissions.launch(SyncManager.REQUIRED_PERMISSIONS)
                 }
             ) {
               Text("Grant Permissions")
@@ -198,14 +179,6 @@ class MainActivity : ComponentActivity() {
         }
       }
     }
-  }
-
-  companion object {
-    val PERMISSIONS =
-        setOf(
-            HealthPermission.getReadPermission(WeightRecord::class),
-            HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
-        )
   }
 }
 

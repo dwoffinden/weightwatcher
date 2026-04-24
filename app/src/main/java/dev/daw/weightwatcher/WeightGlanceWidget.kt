@@ -2,6 +2,7 @@ package dev.daw.weightwatcher
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -88,7 +89,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
           style =
               TextStyle(
                   fontWeight = FontWeight.Bold,
-                  color = ColorProvider(android.R.color.white),
+                  color = ColorProvider(Color.White),
               ),
       )
     }

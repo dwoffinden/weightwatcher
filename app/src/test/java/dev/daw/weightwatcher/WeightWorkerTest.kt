@@ -18,13 +18,13 @@ class WeightWorkerTest {
   @Test
   fun testEmptyChangesReturnsCurrent() {
     val current = Instant.now()
-    val result = WeightWorker.getLatestWeightTimeFromChanges(emptyList(), current)
+    val result = SyncManager.getLatestWeightTimeFromChanges(emptyList(), current)
     assertThat(result).isEqualTo(current)
   }
 
   @Test
   fun testNullCurrentEmptyChangesReturnsNull() {
-    val result = WeightWorker.getLatestWeightTimeFromChanges(emptyList(), null)
+    val result = SyncManager.getLatestWeightTimeFromChanges(emptyList(), null)
     assertThat(result).isNull()
   }
 
@@ -62,7 +62,7 @@ class WeightWorkerTest {
     val response = fakeClient.getChanges(token)
     val changes = response.changes
 
-    val result = WeightWorker.getLatestWeightTimeFromChanges(changes, null)
+    val result = SyncManager.getLatestWeightTimeFromChanges(changes, null)
     assertThat(result).isEqualTo(t2)
   }
 
@@ -84,7 +84,7 @@ class WeightWorkerTest {
     val response = fakeClient.getChanges(token)
     val changes = response.changes
 
-    val result = WeightWorker.getLatestWeightTimeFromChanges(changes, current)
+    val result = SyncManager.getLatestWeightTimeFromChanges(changes, current)
     assertThat(result).isEqualTo(current)
   }
 }
