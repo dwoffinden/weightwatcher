@@ -26,9 +26,10 @@
         };
         buildToolsVersion = "37.0.0";
         platformVersion = "37";
+        emulatorPlatformVersion = "36";
         androidComposition = pkgs.androidenv.composeAndroidPackages {
           buildToolsVersions = [ buildToolsVersion ];
-          platformVersions = [ platformVersion ];
+          platformVersions = [ platformVersion emulatorPlatformVersion ];
           abiVersions = [
             "x86_64"
             "arm64-v8a"
@@ -49,7 +50,7 @@
         emulator-run = pkgs.writeShellScriptBin "emulator-run" ''
           set -e
           AVD_NAME="weightwatcher"
-          TARGET_IMAGE="system-images;android-${platformVersion};google_apis_playstore;x86_64"
+          TARGET_IMAGE="system-images;android-${emulatorPlatformVersion};google_apis_playstore;x86_64"
 
           # Check if the AVD exists and is healthy
           AVD_INFO=$(avdmanager list avd)
