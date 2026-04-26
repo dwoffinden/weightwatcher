@@ -16,15 +16,8 @@ class WeightWorkerTest {
   private val fakeClient = FakeHealthConnectClient()
 
   @Test
-  fun testEmptyChangesReturnsCurrent() {
-    val current = Instant.now()
-    val result = SyncManager.getLatestWeightTimeFromChanges(emptyList(), current)
-    assertThat(result).isEqualTo(current)
-  }
-
-  @Test
-  fun testNullCurrentEmptyChangesReturnsNull() {
-    val result = SyncManager.getLatestWeightTimeFromChanges(emptyList(), null)
+  fun testEmptyChangesReturnsNull() {
+    val result = SyncManager.getLatestWeightTimeFromChanges(emptyList())
     assertThat(result).isNull()
   }
 
@@ -62,7 +55,7 @@ class WeightWorkerTest {
     val response = fakeClient.getChanges(token)
     val changes = response.changes
 
-    val result = SyncManager.getLatestWeightTimeFromChanges(changes, null)
+    val result = SyncManager.getLatestWeightTimeFromChanges(changes)
     assertThat(result).isEqualTo(t2)
   }
 
@@ -84,7 +77,8 @@ class WeightWorkerTest {
     val response = fakeClient.getChanges(token)
     val changes = response.changes
 
-    val result = SyncManager.getLatestWeightTimeFromChanges(changes, current)
+    val latestFromChanges = SyncManager.getLatestWeightTimeFromChanges(changes)
+    val result = listOfNotNull(current, latestFromChanges).maxOrNull()
     assertThat(result).isEqualTo(current)
   }
 }

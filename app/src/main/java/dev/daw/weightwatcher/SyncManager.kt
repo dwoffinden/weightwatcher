@@ -16,6 +16,8 @@ import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import java.time.Instant
+import kotlin.comparisons.naturalOrder
+import kotlin.comparisons.nullsFirst
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -76,8 +78,9 @@ class SyncManager(private val context: Context) {
 
         Log.i("SyncManager", "Fetched ${changesResponse.changes.size} changes")
 
+        val latestFromChanges = getLatestWeightTimeFromChanges(changesResponse.changes)
         lastWeightTimeInstant =
-            getLatestWeightTimeFromChanges(changesResponse.changes, lastWeightTimeInstant)
+            maxOf(lastWeightTimeInstant, latestFromChanges, nullsFirst(naturalOrder()))
         changesToken = changesResponse.nextChangesToken
       }
 
@@ -127,22 +130,12 @@ class SyncManager(private val context: Context) {
     val KEY_CHANGES_TOKEN = stringPreferencesKey("changes_token")
     val KEY_LAST_WEIGHT_TIME = stringPreferencesKey("last_weight_time")
 
-    fun getLatestWeightTimeFromChanges(
-        changes: List<Change>,
-        currentLatest: Instant?,
-    ): Instant? {
-      var latest = currentLatest
-      for (change in changes) {
-        if (change is UpsertionChange) {
-          val record = change.record
-          if (record is WeightRecord) {
-            if (latest == null || record.time > latest) {
-              latest = record.time
-            }
-          }
-        }
-      }
-      return latest
-    }
+    fun getLatestWeightTimeFromChanges(changes: List<Change>): Instant? =
+        changes
+            .asSequence()
+            .filterIsInstance<UpsertionChange>()
+            .map { it.record }
+            .filterIsInstance<WeightRecord>()
+            .maxOfOrNull { it.time }
   }
 }
