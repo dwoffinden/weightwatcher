@@ -39,11 +39,12 @@ class SyncManager(private val context: Context) {
 
     if (!granted.containsAll(REQUIRED_PERMISSIONS)) {
       Log.i("SyncManager", "Permissions not granted, updating widget to Auth state")
-      updateGlanceWidget(null, hasPermissions = false)
+      updateGlanceWidget(null, hasPermissions = false, isSyncing = false)
       return Result.success(Unit)
     }
 
     Log.i("SyncManager", "Starting Health Connect sync")
+    updateGlanceWidget(null, hasPermissions = true, isSyncing = true)
 
     val prefs = context.dataStore.data.first()
     var changesToken = prefs[KEY_CHANGES_TOKEN]
@@ -98,10 +99,10 @@ class SyncManager(private val context: Context) {
       if (lastWeightTimeInstant != null) {
         val hoursStale = Duration.between(lastWeightTimeInstant, Instant.now()).toHours()
         Log.i("SyncManager", "Latest weight is $hoursStale hours stale")
-        updateGlanceWidget(hoursStale, hasPermissions = true)
+        updateGlanceWidget(hoursStale, hasPermissions = true, isSyncing = false)
       } else {
         Log.i("SyncManager", "No weight records found, updating widget to default state")
-        updateGlanceWidget(null, hasPermissions = true)
+        updateGlanceWidget(null, hasPermissions = true, isSyncing = false)
       }
 
       return Result.success(Unit)
@@ -110,9 +111,11 @@ class SyncManager(private val context: Context) {
           "SyncManager",
           "SecurityException: Missing permissions for background read? ${e.message}",
       )
+      updateGlanceWidget(null, hasPermissions = false, isSyncing = false)
       return Result.failure(e)
     } catch (e: Exception) {
       Log.e("SyncManager", "Error updating weight: ${e.message}", e)
+      updateGlanceWidget(null, hasPermissions = true, isSyncing = false)
       return Result.failure(e)
     }
   }
@@ -129,6 +132,7 @@ class SyncManager(private val context: Context) {
   private suspend fun updateGlanceWidget(
       hoursStale: Long?,
       hasPermissions: Boolean,
+      isSyncing: Boolean,
   ) {
     val manager = GlanceAppWidgetManager(context)
     val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
@@ -140,6 +144,7 @@ class SyncManager(private val context: Context) {
           prefs.remove(WeightGlanceWidget.KEY_HOURS_STALE)
         }
         prefs[WeightGlanceWidget.KEY_HAS_PERMISSIONS] = hasPermissions
+        prefs[WeightGlanceWidget.KEY_IS_SYNCING] = isSyncing
       }
     }
     WeightGlanceWidget().updateAll(context)

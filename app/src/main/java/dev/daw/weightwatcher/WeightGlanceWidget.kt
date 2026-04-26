@@ -11,9 +11,11 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -41,13 +43,19 @@ class WeightGlanceWidget : GlanceAppWidget() {
       val prefs = currentState<Preferences>()
       val hoursStale = if (prefs.contains(KEY_HOURS_STALE)) prefs[KEY_HOURS_STALE] else null
       val hasPermissions = prefs[KEY_HAS_PERMISSIONS] ?: true
+      val isSyncing = prefs[KEY_IS_SYNCING] ?: false
 
-      WidgetContent(context, hoursStale, hasPermissions)
+      WidgetContent(context, hoursStale, hasPermissions, isSyncing)
     }
   }
 
   @Composable
-  private fun WidgetContent(context: Context, hoursStale: Long?, hasPermissions: Boolean) {
+  private fun WidgetContent(
+      context: Context,
+      hoursStale: Long?,
+      hasPermissions: Boolean,
+      isSyncing: Boolean,
+  ) {
     Column(
         modifier =
             GlanceModifier.fillMaxSize()
@@ -65,6 +73,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
     ) {
       val iconRes =
           when {
+            isSyncing -> android.R.drawable.stat_notify_sync
             !hasPermissions -> android.R.drawable.ic_dialog_alert
             hoursStale == null -> android.R.drawable.ic_menu_help
             hoursStale <= 20 -> R.drawable.ic_check_green
@@ -73,6 +82,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
 
       val text =
           when {
+            isSyncing -> "Sync..."
             !hasPermissions -> "Auth"
             hoursStale == null -> "None"
             else -> "${hoursStale}h"
@@ -98,14 +108,15 @@ class WeightGlanceWidget : GlanceAppWidget() {
   companion object {
     val KEY_HOURS_STALE = longPreferencesKey("hours_stale")
     val KEY_HAS_PERMISSIONS = booleanPreferencesKey("has_permissions")
+    val KEY_IS_SYNCING = booleanPreferencesKey("is_syncing")
   }
 }
 
-class RefreshCallback : androidx.glance.appwidget.action.ActionCallback {
+class RefreshCallback : ActionCallback {
   override suspend fun onAction(
       context: Context,
       glanceId: GlanceId,
-      parameters: androidx.glance.action.ActionParameters,
+      parameters: ActionParameters,
   ) {
     WeightWorker.enqueueOneTimeWork(context)
   }
