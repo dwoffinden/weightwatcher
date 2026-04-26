@@ -75,7 +75,7 @@
               enable = true;
               name = "ktfmt";
               entry = "${pkgs.ktfmt}/bin/ktfmt";
-              files = "\\.kt$";
+              files = "\\.kts?$";
             };
           };
         };
