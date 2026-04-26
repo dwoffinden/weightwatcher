@@ -86,9 +86,7 @@ class SyncManager(private val context: Context) {
 
       // Save state
       context.dataStore.edit { editPrefs ->
-        if (changesToken != null) {
-          editPrefs[KEY_CHANGES_TOKEN] = changesToken!!
-        }
+        editPrefs[KEY_CHANGES_TOKEN] = changesToken
         if (lastWeightTimeInstant != null) {
           editPrefs[KEY_LAST_WEIGHT_TIME] = lastWeightTimeInstant.toString()
         }
