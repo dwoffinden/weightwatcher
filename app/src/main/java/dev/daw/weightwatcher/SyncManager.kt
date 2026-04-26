@@ -18,7 +18,6 @@ import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
-import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -96,14 +95,7 @@ class SyncManager(private val context: Context) {
       }
 
       // Update UI
-      if (lastWeightTimeInstant != null) {
-        val hoursStale = Duration.between(lastWeightTimeInstant, Instant.now()).toHours()
-        Log.i("SyncManager", "Latest weight is $hoursStale hours stale")
-        updateGlanceWidget(hoursStale, hasPermissions = true, isSyncing = false)
-      } else {
-        Log.i("SyncManager", "No weight records found, updating widget to default state")
-        updateGlanceWidget(null, hasPermissions = true, isSyncing = false)
-      }
+      updateGlanceWidget(lastWeightTimeInstant, hasPermissions = true, isSyncing = false)
 
       return Result.success(Unit)
     } catch (e: SecurityException) {
@@ -130,7 +122,7 @@ class SyncManager(private val context: Context) {
   }
 
   private suspend fun updateGlanceWidget(
-      hoursStale: Long?,
+      lastWeightTime: Instant?,
       hasPermissions: Boolean,
       isSyncing: Boolean,
   ) {
@@ -138,10 +130,10 @@ class SyncManager(private val context: Context) {
     val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
     glanceIds.forEach { glanceId ->
       updateAppWidgetState(context, glanceId) { prefs ->
-        if (hoursStale != null) {
-          prefs[WeightGlanceWidget.KEY_HOURS_STALE] = hoursStale
+        if (lastWeightTime != null) {
+          prefs[WeightGlanceWidget.KEY_LAST_WEIGHT_TIME] = lastWeightTime.toString()
         } else {
-          prefs.remove(WeightGlanceWidget.KEY_HOURS_STALE)
+          prefs.remove(WeightGlanceWidget.KEY_LAST_WEIGHT_TIME)
         }
         prefs[WeightGlanceWidget.KEY_HAS_PERMISSIONS] = hasPermissions
         prefs[WeightGlanceWidget.KEY_IS_SYNCING] = isSyncing

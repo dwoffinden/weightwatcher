@@ -33,8 +33,6 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
-import java.time.Duration
-import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -139,17 +137,15 @@ class MainActivity : ComponentActivity() {
                   onClick = {
                     coroutineScope.launch {
                       val manager = GlanceAppWidgetManager(this@MainActivity)
-                      val staleness =
-                          lastWeightTime?.let { time ->
-                            Duration.between(time, Instant.now()).toHours()
-                          }
-
                       manager.requestPinGlanceAppWidget(
                           receiver = WeightGlanceWidgetReceiver::class.java,
                           preview = WeightGlanceWidget(),
                           previewState =
-                              if (staleness != null) {
-                                preferencesOf(WeightGlanceWidget.KEY_HOURS_STALE to staleness)
+                              if (lastWeightTime != null) {
+                                preferencesOf(
+                                    WeightGlanceWidget.KEY_LAST_WEIGHT_TIME to
+                                        lastWeightTime.toString()
+                                )
                               } else {
                                 preferencesOf()
                               },

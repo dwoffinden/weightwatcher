@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
@@ -33,6 +33,8 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import java.time.Duration
+import java.time.Instant
 
 class WeightGlanceWidget : GlanceAppWidget() {
 
@@ -41,21 +43,23 @@ class WeightGlanceWidget : GlanceAppWidget() {
   override suspend fun provideGlance(context: Context, id: GlanceId) {
     provideContent {
       val prefs = currentState<Preferences>()
-      val hoursStale = if (prefs.contains(KEY_HOURS_STALE)) prefs[KEY_HOURS_STALE] else null
+      val lastWeightTime = prefs[KEY_LAST_WEIGHT_TIME]?.let { Instant.parse(it) }
       val hasPermissions = prefs[KEY_HAS_PERMISSIONS] ?: true
       val isSyncing = prefs[KEY_IS_SYNCING] ?: false
 
-      WidgetContent(context, hoursStale, hasPermissions, isSyncing)
+      WidgetContent(context, lastWeightTime, hasPermissions, isSyncing)
     }
   }
 
   @Composable
   private fun WidgetContent(
       context: Context,
-      hoursStale: Long?,
+      lastWeightTime: Instant?,
       hasPermissions: Boolean,
       isSyncing: Boolean,
   ) {
+    val hoursStale = lastWeightTime?.let { Duration.between(it, Instant.now()).toHours() }
+
     Column(
         modifier =
             GlanceModifier.fillMaxSize()
@@ -106,7 +110,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
   }
 
   companion object {
-    val KEY_HOURS_STALE = longPreferencesKey("hours_stale")
+    val KEY_LAST_WEIGHT_TIME = stringPreferencesKey("last_weight_time")
     val KEY_HAS_PERMISSIONS = booleanPreferencesKey("has_permissions")
     val KEY_IS_SYNCING = booleanPreferencesKey("is_syncing")
   }
