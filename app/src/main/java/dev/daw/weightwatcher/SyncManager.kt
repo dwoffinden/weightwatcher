@@ -7,9 +7,6 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.state.updateAppWidgetState
-import androidx.glance.appwidget.updateAll
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.changes.Change
 import androidx.health.connect.client.changes.UpsertionChange
@@ -38,12 +35,12 @@ class SyncManager(private val context: Context) {
 
     if (!granted.containsAll(REQUIRED_PERMISSIONS)) {
       Log.i("SyncManager", "Permissions not granted, updating widget to Auth state")
-      updateGlanceWidget(null, hasPermissions = false, isSyncing = false)
+      WeightGlanceWidget.updateAllEntries(context, null, hasPermissions = false, isSyncing = false)
       return Result.success(Unit)
     }
 
     Log.i("SyncManager", "Starting Health Connect sync")
-    updateGlanceWidget(null, hasPermissions = true, isSyncing = true)
+    WeightGlanceWidget.updateAllEntries(context, null, hasPermissions = true, isSyncing = true)
 
     val prefs = context.dataStore.data.first()
     var changesToken = prefs[KEY_CHANGES_TOKEN]
@@ -95,7 +92,12 @@ class SyncManager(private val context: Context) {
       }
 
       // Update UI
-      updateGlanceWidget(lastWeightTimeInstant, hasPermissions = true, isSyncing = false)
+      WeightGlanceWidget.updateAllEntries(
+          context,
+          lastWeightTimeInstant,
+          hasPermissions = true,
+          isSyncing = false,
+      )
 
       return Result.success(Unit)
     } catch (e: SecurityException) {
@@ -103,43 +105,17 @@ class SyncManager(private val context: Context) {
           "SyncManager",
           "SecurityException: Missing permissions for background read? ${e.message}",
       )
-      updateGlanceWidget(null, hasPermissions = false, isSyncing = false)
+      WeightGlanceWidget.updateAllEntries(context, null, hasPermissions = false, isSyncing = false)
       return Result.failure(e)
     } catch (e: Exception) {
       Log.e("SyncManager", "Error updating weight: ${e.message}", e)
-      updateGlanceWidget(null, hasPermissions = true, isSyncing = false)
+      WeightGlanceWidget.updateAllEntries(context, null, hasPermissions = true, isSyncing = false)
       return Result.failure(e)
     }
   }
 
   suspend fun resetGlanceWidget() {
-    val manager = GlanceAppWidgetManager(context)
-    val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
-    glanceIds.forEach { glanceId ->
-      updateAppWidgetState(context, glanceId) { prefs -> prefs.clear() }
-    }
-    WeightGlanceWidget().updateAll(context)
-  }
-
-  private suspend fun updateGlanceWidget(
-      lastWeightTime: Instant?,
-      hasPermissions: Boolean,
-      isSyncing: Boolean,
-  ) {
-    val manager = GlanceAppWidgetManager(context)
-    val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
-    glanceIds.forEach { glanceId ->
-      updateAppWidgetState(context, glanceId) { prefs ->
-        if (lastWeightTime != null) {
-          prefs[WeightGlanceWidget.KEY_LAST_WEIGHT_TIME] = lastWeightTime.toString()
-        } else {
-          prefs.remove(WeightGlanceWidget.KEY_LAST_WEIGHT_TIME)
-        }
-        prefs[WeightGlanceWidget.KEY_HAS_PERMISSIONS] = hasPermissions
-        prefs[WeightGlanceWidget.KEY_IS_SYNCING] = isSyncing
-      }
-    }
-    WeightGlanceWidget().updateAll(context)
+    WeightGlanceWidget.resetAll(context)
   }
 
   companion object {

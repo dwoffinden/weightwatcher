@@ -28,9 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.datastore.preferences.core.preferencesOf
 import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import java.time.ZoneId
@@ -65,15 +63,7 @@ class MainActivity : ComponentActivity() {
           if (hasPermissions) {
             Log.i("MainActivity", "All permissions granted! Enqueuing sync...")
             // Immediate visual update to fix widget click behavior
-            coroutineScope.launch {
-              val manager = GlanceAppWidgetManager(this@MainActivity)
-              val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
-              glanceIds.forEach { glanceId ->
-                updateAppWidgetState(this@MainActivity, glanceId) {
-                  it.toMutablePreferences().clear()
-                }
-              }
-            }
+            coroutineScope.launch { WeightGlanceWidget.resetAll(this@MainActivity) }
             WeightWorker.enqueueOneTimeWork(this@MainActivity)
           }
         }
@@ -140,15 +130,7 @@ class MainActivity : ComponentActivity() {
                       manager.requestPinGlanceAppWidget(
                           receiver = WeightGlanceWidgetReceiver::class.java,
                           preview = WeightGlanceWidget(),
-                          previewState =
-                              if (lastWeightTime != null) {
-                                preferencesOf(
-                                    WeightGlanceWidget.KEY_LAST_WEIGHT_TIME to
-                                        lastWeightTime.toString()
-                                )
-                              } else {
-                                preferencesOf()
-                              },
+                          previewState = WeightGlanceWidget.createMetadata(lastWeightTime),
                       )
                     }
                   },

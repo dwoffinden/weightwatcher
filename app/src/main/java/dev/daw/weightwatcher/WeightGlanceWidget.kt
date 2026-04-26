@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -15,9 +17,12 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
+import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.appwidget.updateAll
 import androidx.glance.background
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
@@ -110,9 +115,58 @@ class WeightGlanceWidget : GlanceAppWidget() {
   }
 
   companion object {
-    val KEY_LAST_WEIGHT_TIME = stringPreferencesKey("last_weight_time")
-    val KEY_HAS_PERMISSIONS = booleanPreferencesKey("has_permissions")
-    val KEY_IS_SYNCING = booleanPreferencesKey("is_syncing")
+    private val KEY_LAST_WEIGHT_TIME = stringPreferencesKey("last_weight_time")
+    private val KEY_HAS_PERMISSIONS = booleanPreferencesKey("has_permissions")
+    private val KEY_IS_SYNCING = booleanPreferencesKey("is_syncing")
+
+    /** Updates the state for all instances of this widget. */
+    suspend fun updateAllEntries(
+        context: Context,
+        lastWeightTime: Instant?,
+        hasPermissions: Boolean,
+        isSyncing: Boolean,
+    ) {
+      val manager = GlanceAppWidgetManager(context)
+      val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
+      glanceIds.forEach { glanceId ->
+        updateAppWidgetState(context, glanceId) { prefs: MutablePreferences ->
+          if (lastWeightTime != null) {
+            prefs[KEY_LAST_WEIGHT_TIME] = lastWeightTime.toString()
+          } else {
+            prefs.remove(KEY_LAST_WEIGHT_TIME)
+          }
+          prefs[KEY_HAS_PERMISSIONS] = hasPermissions
+          prefs[KEY_IS_SYNCING] = isSyncing
+        }
+      }
+      WeightGlanceWidget().updateAll(context)
+    }
+
+    /** Resets the state (clears all preferences) for all instances of this widget. */
+    suspend fun resetAll(context: Context) {
+      val manager = GlanceAppWidgetManager(context)
+      val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
+      glanceIds.forEach { glanceId ->
+        updateAppWidgetState(context, glanceId) { prefs -> prefs.clear() }
+      }
+      WeightGlanceWidget().updateAll(context)
+    }
+
+    /**
+     * Returns a [Preferences] object suitable for
+     * [GlanceAppWidgetManager.requestPinGlanceAppWidget].
+     */
+    fun createMetadata(
+        lastWeightTime: Instant?,
+        hasPermissions: Boolean = true,
+        isSyncing: Boolean = false,
+    ): Preferences =
+        mutablePreferencesOf(KEY_HAS_PERMISSIONS to hasPermissions, KEY_IS_SYNCING to isSyncing)
+            .apply {
+              if (lastWeightTime != null) {
+                this[KEY_LAST_WEIGHT_TIME] = lastWeightTime.toString()
+              }
+            }
   }
 }
 
