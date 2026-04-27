@@ -55,7 +55,7 @@ dependencies {
 
   // DataStore
   implementation("androidx.datastore:datastore:1.1.2")
-  implementation("com.google.protobuf:protobuf-kotlin-lite:4.29.3")
+  implementation("com.google.protobuf:protobuf-kotlin-lite:4.34.1")
 
   // Coroutines
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
@@ -68,7 +68,7 @@ dependencies {
 }
 
 protobuf {
-  protoc { artifact = "com.google.protobuf:protoc:4.29.3" }
+  protoc { artifact = "com.google.protobuf:protoc:4.34.1" }
   generateProtoTasks {
     all().forEach { task ->
       task.builtins {
