@@ -64,7 +64,7 @@ dependencies {
   testImplementation("junit:junit:4.13.2")
   testImplementation("androidx.health.connect:connect-testing:1.0.0-alpha03")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
-  testImplementation("com.google.truth:truth:1.4.2")
+  testImplementation("com.google.truth:truth:1.4.5")
 }
 
 protobuf {
