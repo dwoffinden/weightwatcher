@@ -4,11 +4,9 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.datastore.preferences.core.MutablePreferences
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.mutablePreferencesOf
-import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.core.DataStore
+import androidx.datastore.core.DataStoreFactory
+import androidx.datastore.dataStoreFile
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
@@ -33,26 +31,28 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.state.GlanceStateDefinition
-import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import java.time.Duration
+import java.io.File
 import java.time.Instant
 
 class WeightGlanceWidget : GlanceAppWidget() {
-
-  override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
+  override val stateDefinition: GlanceStateDefinition<WidgetState> = WidgetStateDefinition
 
   override suspend fun provideGlance(context: Context, id: GlanceId) {
     provideContent {
-      val prefs = currentState<Preferences>()
-      val lastWeightTime = prefs[KEY_LAST_WEIGHT_TIME]?.let { Instant.parse(it) }
-      val hasPermissions = prefs[KEY_HAS_PERMISSIONS] ?: true
-      val isSyncing = prefs[KEY_IS_SYNCING] ?: false
+      val state = currentState<WidgetState>()
+      val lastWeightTime = state.lastWeightTimeOrNull?.toInstant()
+      val status = state.status
 
-      WidgetContent(context, lastWeightTime, hasPermissions, isSyncing)
+      WidgetContent(
+          context,
+          lastWeightTime,
+          hasPermissions = status != WidgetState.Status.NO_PERMISSIONS,
+          isSyncing = status == WidgetState.Status.SYNCING,
+      )
     }
   }
 
@@ -63,7 +63,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
       hasPermissions: Boolean,
       isSyncing: Boolean,
   ) {
-    val hoursStale = lastWeightTime?.let { Duration.between(it, Instant.now()).toHours() }
+    val hoursStale = lastWeightTime?.let { (Instant.now() - it).toHours() }
 
     Column(
         modifier =
@@ -115,10 +115,6 @@ class WeightGlanceWidget : GlanceAppWidget() {
   }
 
   companion object {
-    private val KEY_LAST_WEIGHT_TIME = stringPreferencesKey("last_weight_time")
-    private val KEY_HAS_PERMISSIONS = booleanPreferencesKey("has_permissions")
-    private val KEY_IS_SYNCING = booleanPreferencesKey("is_syncing")
-
     /** Updates the state for all instances of this widget. */
     suspend fun updateAllEntries(
         context: Context,
@@ -129,45 +125,72 @@ class WeightGlanceWidget : GlanceAppWidget() {
       val manager = GlanceAppWidgetManager(context)
       val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
       glanceIds.forEach { glanceId ->
-        updateAppWidgetState(context, glanceId) { prefs: MutablePreferences ->
-          if (lastWeightTime != null) {
-            prefs[KEY_LAST_WEIGHT_TIME] = lastWeightTime.toString()
-          } else {
-            prefs.remove(KEY_LAST_WEIGHT_TIME)
+        updateAppWidgetState(context, WidgetStateDefinition, glanceId) { state: WidgetState ->
+          state.copy {
+            if (lastWeightTime != null) {
+              this.lastWeightTime = lastWeightTime.toTimestamp()
+            } else {
+              clearLastWeightTime()
+            }
+            status =
+                when {
+                  isSyncing -> WidgetState.Status.SYNCING
+                  !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
+                  else -> WidgetState.Status.OK
+                }
           }
-          prefs[KEY_HAS_PERMISSIONS] = hasPermissions
-          prefs[KEY_IS_SYNCING] = isSyncing
         }
       }
       WeightGlanceWidget().updateAll(context)
     }
 
-    /** Resets the state (clears all preferences) for all instances of this widget. */
+    /** Resets the state for all instances of this widget. */
     suspend fun resetAll(context: Context) {
       val manager = GlanceAppWidgetManager(context)
       val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
       glanceIds.forEach { glanceId ->
-        updateAppWidgetState(context, glanceId) { prefs -> prefs.clear() }
+        updateAppWidgetState(context, WidgetStateDefinition, glanceId) {
+          WidgetState.getDefaultInstance()
+        }
       }
       WeightGlanceWidget().updateAll(context)
     }
 
     /**
-     * Returns a [Preferences] object suitable for
+     * Returns a [WidgetState] object suitable for
      * [GlanceAppWidgetManager.requestPinGlanceAppWidget].
      */
     fun createMetadata(
         lastWeightTime: Instant?,
         hasPermissions: Boolean = true,
         isSyncing: Boolean = false,
-    ): Preferences =
-        mutablePreferencesOf(KEY_HAS_PERMISSIONS to hasPermissions, KEY_IS_SYNCING to isSyncing)
+    ): WidgetState =
+        WidgetState.newBuilder()
             .apply {
               if (lastWeightTime != null) {
-                this[KEY_LAST_WEIGHT_TIME] = lastWeightTime.toString()
+                setLastWeightTime(lastWeightTime.toTimestamp())
               }
+              setStatus(
+                  when {
+                    isSyncing -> WidgetState.Status.SYNCING
+                    !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
+                    else -> WidgetState.Status.OK
+                  }
+              )
             }
+            .build()
   }
+}
+
+object WidgetStateDefinition : GlanceStateDefinition<WidgetState> {
+  override suspend fun getDataStore(context: Context, fileKey: String): DataStore<WidgetState> =
+      DataStoreFactory.create(
+          serializer = ProtoSerializer(WidgetState.getDefaultInstance(), WidgetState.parser()),
+          produceFile = { getLocation(context, fileKey) },
+      )
+
+  override fun getLocation(context: Context, fileKey: String): File =
+      context.dataStoreFile("widget_state_$fileKey.pb")
 }
 
 class RefreshCallback : ActionCallback {

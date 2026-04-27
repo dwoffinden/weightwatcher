@@ -3,10 +3,7 @@ package dev.daw.weightwatcher
 import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.dataStore
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.changes.Change
 import androidx.health.connect.client.changes.UpsertionChange
@@ -23,14 +20,17 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 // TODO: Remove this context extension and inject an explicit singleton via Dagger/Hilt instead.
-private val Context.dataStore: DataStore<Preferences> by
-    preferencesDataStore(name = "sync_settings")
+private val Context.dataStore: DataStore<SyncSettings> by
+    dataStore(
+        fileName = "sync_settings.pb",
+        serializer = ProtoSerializer(SyncSettings.getDefaultInstance(), SyncSettings.parser()),
+    )
 
 class SyncManager(private val context: Context) {
   private val healthConnectClient by lazy { HealthConnectClient.getOrCreate(context) }
 
   val lastWeightTime: Flow<Instant?> =
-      context.dataStore.data.map { prefs -> prefs[KEY_LAST_WEIGHT_TIME]?.let { Instant.parse(it) } }
+      context.dataStore.data.map { settings -> settings.lastWeightTimeOrNull?.toInstant() }
 
   suspend fun performSync(): Result<Unit> {
     val granted = healthConnectClient.permissionController.getGrantedPermissions()
@@ -44,9 +44,9 @@ class SyncManager(private val context: Context) {
     Log.i("SyncManager", "Starting Health Connect sync")
     WeightGlanceWidget.updateAllEntries(context, null, hasPermissions = true, isSyncing = true)
 
-    val prefs = context.dataStore.data.first()
-    var changesToken = prefs[KEY_CHANGES_TOKEN]
-    var lastWeightTimeInstant: Instant? = prefs[KEY_LAST_WEIGHT_TIME]?.let { Instant.parse(it) }
+    val settings = context.dataStore.data.first()
+    var changesToken: String? = settings.changesToken.takeIf { it.isNotEmpty() }
+    var lastWeightTimeInstant: Instant? = settings.lastWeightTimeOrNull?.toInstant()
 
     try {
       if (changesToken == null) {
@@ -72,7 +72,7 @@ class SyncManager(private val context: Context) {
         val changesResponse = healthConnectClient.getChanges(changesToken)
         if (changesResponse.changesTokenExpired) {
           Log.i("SyncManager", "Changes token expired, clearing and retrying")
-          context.dataStore.edit { it.remove(KEY_CHANGES_TOKEN) }
+          context.dataStore.updateData { it.copy { clearChangesToken() } }
           return Result.failure(Exception("Token expired"))
         }
 
@@ -85,10 +85,14 @@ class SyncManager(private val context: Context) {
       }
 
       // Save state
-      context.dataStore.edit { editPrefs ->
-        editPrefs[KEY_CHANGES_TOKEN] = changesToken
-        if (lastWeightTimeInstant != null) {
-          editPrefs[KEY_LAST_WEIGHT_TIME] = lastWeightTimeInstant.toString()
+      context.dataStore.updateData { currentSettings ->
+        currentSettings.copy {
+          this.changesToken = changesToken
+          if (lastWeightTimeInstant != null) {
+            this.lastWeightTime = lastWeightTimeInstant.toTimestamp()
+          } else {
+            clearLastWeightTime()
+          }
         }
       }
 
@@ -125,8 +129,6 @@ class SyncManager(private val context: Context) {
             HealthPermission.getReadPermission(WeightRecord::class),
             HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
         )
-    val KEY_CHANGES_TOKEN = stringPreferencesKey("changes_token")
-    val KEY_LAST_WEIGHT_TIME = stringPreferencesKey("last_weight_time")
 
     fun getLatestWeightTimeFromChanges(changes: List<Change>): Instant? =
         changes

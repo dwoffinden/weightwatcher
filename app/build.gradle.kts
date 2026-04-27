@@ -1,6 +1,7 @@
 plugins {
   id("com.android.application")
   id("org.jetbrains.kotlin.plugin.compose")
+  id("com.google.protobuf")
 }
 
 android {
@@ -53,7 +54,8 @@ dependencies {
   implementation("androidx.glance:glance-material3:1.1.1")
 
   // DataStore
-  implementation("androidx.datastore:datastore-preferences:1.1.2")
+  implementation("androidx.datastore:datastore:1.1.2")
+  implementation("com.google.protobuf:protobuf-kotlin-lite:4.29.3")
 
   // Coroutines
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
@@ -63,4 +65,16 @@ dependencies {
   testImplementation("androidx.health.connect:connect-testing:1.0.0-alpha03")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
   testImplementation("com.google.truth:truth:1.4.2")
+}
+
+protobuf {
+  protoc { artifact = "com.google.protobuf:protoc:4.29.3" }
+  generateProtoTasks {
+    all().forEach { task ->
+      task.builtins {
+        register("java") { option("lite") }
+        register("kotlin") { option("lite") }
+      }
+    }
+  }
 }

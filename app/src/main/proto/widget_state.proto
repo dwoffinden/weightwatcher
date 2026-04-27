@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+option java_package = "dev.daw.weightwatcher";
+option java_multiple_files = true;
+
+message WidgetState {
+  .google.protobuf.Timestamp last_weight_time = 1;
+  enum Status {
+    OK = 0;
+    SYNCING = 1;
+    NO_PERMISSIONS = 2;
+  }
+  Status status = 2;
+}
