@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">WeightWatcher</string>
-    <string name="widget_description">Shows how many hours since your last weight check.</string>
+ <string name="app_name">WeightWatcher</string>
+ <string name="widget_description">Shows how many hours since your last weight check.</string>
 </resources>

@@ -29,7 +29,10 @@
         emulatorPlatformVersion = "36";
         androidComposition = pkgs.androidenv.composeAndroidPackages {
           buildToolsVersions = [ buildToolsVersion ];
-          platformVersions = [ platformVersion emulatorPlatformVersion ];
+          platformVersions = [
+            platformVersion
+            emulatorPlatformVersion
+          ];
           abiVersions = [
             "x86_64"
             "arm64-v8a"
@@ -77,6 +80,12 @@
               entry = "${pkgs.ktfmt}/bin/ktfmt";
               files = "\\.kts?$";
             };
+            xmlformat = {
+              enable = true;
+              name = "xmlformat";
+              entry = "${pkgs.xmlformat}/bin/xmlformat -i";
+              files = "\\.xml$";
+            };
           };
         };
         jdk = pkgs.jdk25_headless;
@@ -109,6 +118,7 @@
             (pkgs.gradle_9.override { java = jdk; })
             emulator-run
             pkgs.ktfmt
+            pkgs.xmlformat
             pkgs.kotlin-language-server
           ];
           shellHook = ''
