@@ -5,6 +5,9 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     git-hooks.url = "github:cachix/git-hooks.nix";
+    git-hooks.inputs.nixpkgs.follows = "nixpkgs";
+    flint.url = "github:notashelf/flint";
+    flint.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -13,6 +16,7 @@
       nixpkgs,
       flake-utils,
       git-hooks,
+      flint,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -86,6 +90,12 @@
               entry = "${pkgs.xmlformat}/bin/xmlformat -i";
               files = "\\.xml$";
             };
+            flint = {
+              enable = true;
+              name = "flint";
+              entry = "${flint.packages.${system}.default}/bin/flint --fail-if-multiple-versions";
+              files = "flake\\.(nix|lock)$";
+            };
           };
         };
         jdk = pkgs.jdk25_headless;
@@ -119,6 +129,7 @@
             emulator-run
             pkgs.ktfmt
             pkgs.xmlformat
+            flint.packages.${system}.default
             pkgs.kotlin-language-server
           ];
           shellHook = ''
