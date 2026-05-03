@@ -34,7 +34,7 @@ android {
 dependencies {
   implementation("androidx.core:core-ktx:1.18.0")
   implementation("androidx.appcompat:appcompat:1.7.1")
-  implementation("com.google.android.material:material:1.12.0")
+  implementation("com.google.android.material:material:1.13.0")
 
   // Compose
   implementation("androidx.activity:activity-compose:1.13.0")
@@ -44,7 +44,7 @@ dependencies {
   implementation("androidx.compose.ui:ui-tooling-preview")
 
   // Health Connect
-  implementation("androidx.health.connect:connect-client:1.2.0-alpha03")
+  implementation("androidx.health.connect:connect-client:1.2.0-alpha04")
 
   // WorkManager
   implementation("androidx.work:work-runtime-ktx:2.11.2")
@@ -54,7 +54,7 @@ dependencies {
   implementation("androidx.glance:glance-material3:1.1.1")
 
   // DataStore
-  implementation("androidx.datastore:datastore:1.1.2")
+  implementation("androidx.datastore:datastore:1.2.1")
   implementation("com.google.protobuf:protobuf-kotlin-lite:4.34.1")
 
   // Coroutines
