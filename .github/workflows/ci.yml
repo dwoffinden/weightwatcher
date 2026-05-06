@@ -22,14 +22,8 @@ jobs:
           extra_nix_config: |
             accept-flake-config = true
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Run unit tests
-        run: nix develop .#ci --command gradle test
-
-      - name: Build debug APK
-        run: nix develop .#ci --command gradle assembleDebug
+      - name: Run unit tests and build debug APK
+        run: nix develop .#ci --command gradle test assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
