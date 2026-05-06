@@ -46,8 +46,13 @@ class MainActivity : ComponentActivity() {
 
   @Composable
   fun WeightWatcherApp() {
-    val healthConnectClient = HealthConnectClient.getOrCreate(this)
-    val sdkStatus = HealthConnectClient.getSdkStatus(this)
+    val sdkStatus = remember { HealthConnectClient.getSdkStatus(this@MainActivity) }
+    val healthConnectClient =
+        remember(sdkStatus) {
+          if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
+            HealthConnectClient.getOrCreate(this@MainActivity)
+          } else null
+        }
     Log.i("MainActivity", "Health Connect SDK Status: $sdkStatus")
     var hasPermissions by remember { mutableStateOf(false) }
     val syncManager = remember { SyncManager(this) }
@@ -69,12 +74,14 @@ class MainActivity : ComponentActivity() {
         }
 
     LaunchedEffect(Unit) {
-      val granted = healthConnectClient.permissionController.getGrantedPermissions()
-      hasPermissions = granted.containsAll(SyncManager.REQUIRED_PERMISSIONS)
-      Log.i("MainActivity", "Initial permissions check: $hasPermissions")
-      if (hasPermissions) {
-        // Enqueue worker
-        WeightWorker.enqueuePeriodicWork(this@MainActivity)
+      if (healthConnectClient != null) {
+        val granted = healthConnectClient.permissionController.getGrantedPermissions()
+        hasPermissions = granted.containsAll(SyncManager.REQUIRED_PERMISSIONS)
+        Log.i("MainActivity", "Initial permissions check: $hasPermissions")
+        if (hasPermissions) {
+          // Enqueue worker
+          WeightWorker.enqueuePeriodicWork(this@MainActivity)
+        }
       }
     }
 
