@@ -18,6 +18,15 @@ android {
     versionName = "2.0"
   }
 
+  buildTypes {
+    getByName("release") {
+      isMinifyEnabled = true
+      isShrinkResources = true
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      signingConfig = signingConfigs.getByName("debug")
+    }
+  }
+
   buildFeatures {
     compose = true
     viewBinding = true
