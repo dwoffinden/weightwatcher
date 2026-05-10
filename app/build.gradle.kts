@@ -69,12 +69,12 @@ dependencies {
   implementation("com.google.protobuf:protobuf-kotlin-lite:4.34.1")
 
   // Coroutines
-  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
   // Testing
   testImplementation("junit:junit:4.13.2")
   testImplementation("androidx.health.connect:connect-testing:1.0.0-alpha03")
-  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
   testImplementation("com.google.truth:truth:1.4.5")
   testImplementation("org.robolectric:robolectric:4.14.1")
   testImplementation("androidx.compose.ui:ui-test-junit4")
