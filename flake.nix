@@ -78,6 +78,10 @@
         pre-commit-check = git-hooks.lib.${system}.run {
           src = ./.;
           hooks = {
+              yamlfmt = {
+                enable = true;
+                settings.lint-only = false;
+              };
             ktfmt = {
               enable = true;
               name = "ktfmt";
