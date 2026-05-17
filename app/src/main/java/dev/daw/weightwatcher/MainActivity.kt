@@ -6,13 +6,16 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -39,6 +42,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     Log.i("MainActivity", "onCreate called")
     setContent { WeightWatcherApp() }
@@ -87,10 +91,10 @@ class MainActivity : ComponentActivity() {
 
     // SharedPreferences listener logic removed in favor of SyncManager's lastWeightTime Flow
 
-    MaterialTheme {
+    WeightWatcherTheme {
       Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -169,13 +173,21 @@ class MainActivity : ComponentActivity() {
 
 class PermissionsRationaleActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
+    enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     Log.i("PermissionsRationaleActivity", "onCreate called")
     setContent {
-      MaterialTheme {
-        Text(
-            "This app needs permission to read weight from Health Connect to display staleness on the widget."
-        )
+      WeightWatcherTheme {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+          Box(
+              modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),
+              contentAlignment = Alignment.Center,
+          ) {
+            Text(
+                "This app needs permission to read weight from Health Connect to display staleness on the widget."
+            )
+          }
+        }
       }
     }
   }
