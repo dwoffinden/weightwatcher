@@ -1,36 +1,32 @@
 name: CI
-
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
-
 jobs:
   build-and-test:
     name: Build & Test
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
       - name: Install Nix
         uses: cachix/install-nix-action@ab739621df7a23f52766f9ccc97f38da6b7af14f # v31
         with:
           nix_path: nixpkgs=channel:nixos-unstable
           extra_nix_config: |
             accept-flake-config = true
-
-      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+      - name: Cache Nix store
+        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/flake.nix', '**/flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 2G
-
+      - name: Gradle Cache
+        uses: burrunan/gradle-cache-action@663fbad34e03c8f12b27f4999ac46e3d90f87eca # v3.0.1
       - name: Run unit tests and build debug APK
         run: nix develop .#ci --command gradle test assembleDebug
-
       - name: Upload debug APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
