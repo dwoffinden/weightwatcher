@@ -24,7 +24,7 @@ jobs:
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 2G
       - name: Gradle Cache
-        uses: burrunan/gradle-cache-action@4b67497abd37a511d6c1dc6299bdd84ff39f7bf5 # v3.0.2
+        uses: burrunan/gradle-cache-action@404534c34a2faa40430357a3183522a845b04f3b # v3.0.3
       - name: Run unit tests and build debug APK
         run: nix develop .#ci --command gradle test assembleDebug
       - name: Upload debug APK
