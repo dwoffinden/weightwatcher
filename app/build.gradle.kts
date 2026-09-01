@@ -55,7 +55,7 @@ dependencies {
   implementation("androidx.compose.ui:ui-tooling-preview")
 
   // Health Connect
-  implementation("androidx.health.connect:connect-client:1.2.0-alpha04")
+  implementation("androidx.health.connect:connect-client:1.2.0-alpha06")
 
   // WorkManager
   implementation("androidx.work:work-runtime-ktx:2.11.2")
@@ -66,14 +66,14 @@ dependencies {
 
   // DataStore
   implementation("androidx.datastore:datastore:1.2.1")
-  implementation("com.google.protobuf:protobuf-kotlin-lite:4.35.1")
+  implementation("com.google.protobuf:protobuf-kotlin-lite:4.36.0")
 
   // Coroutines
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
   // Testing
   testImplementation("junit:junit:4.13.2")
-  testImplementation("androidx.health.connect:connect-testing:1.0.0-alpha03")
+  testImplementation("androidx.health.connect:connect-testing:1.0.0-alpha04")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
   testImplementation("com.google.truth:truth:1.4.5")
   testImplementation("org.robolectric:robolectric:4.16.1")
@@ -82,7 +82,7 @@ dependencies {
 }
 
 protobuf {
-  protoc { artifact = "com.google.protobuf:protoc:4.35.1" }
+  protoc { artifact = "com.google.protobuf:protoc:4.36.0" }
   generateProtoTasks {
     all().forEach { task ->
       task.builtins {
