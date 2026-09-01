@@ -55,7 +55,7 @@ dependencies {
   implementation("androidx.compose.ui:ui-tooling-preview")
 
   // Health Connect
-  implementation("androidx.health.connect:connect-client:1.2.0-alpha04")
+  implementation("androidx.health.connect:connect-client:1.2.0-alpha06")
 
   // WorkManager
   implementation("androidx.work:work-runtime-ktx:2.11.2")
