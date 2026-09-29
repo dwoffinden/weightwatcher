@@ -27,10 +27,10 @@ This project strictly utilizes **Nix Flakes** for isolation.
    - Run `nix develop` to enter the shell.
    - Run `emulator-run`. This will create a "weightwatcher" AVD if it doesn't exist and start it.
 4. To build the APK:
-   - Run `./gradlew assembleDebug` or `nix develop --command gradle assembleDebug`.
+   - Run `gradle assembleDebug` (or `nix develop --command gradle assembleDebug`).
    - The APK will be located at `app/build/outputs/apk/debug/app-debug.apk`.
 5. To install on a connected device/emulator:
-   - Run `./gradlew installDebug` or `nix develop --command gradle installDebug`.
+   - Run `gradle installDebug` (or `nix develop --command gradle installDebug`).
 
 ## License
 
