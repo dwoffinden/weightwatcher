@@ -76,7 +76,7 @@ dependencies {
   testImplementation("androidx.health.connect:connect-testing:1.0.0-alpha04")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
   testImplementation("com.google.truth:truth:1.4.5")
-  testImplementation("org.robolectric:robolectric:4.16.1")
+  testImplementation("org.robolectric:robolectric:4.17")
   testImplementation("androidx.compose.ui:ui-test-junit4")
   debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
