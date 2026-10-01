@@ -43,8 +43,8 @@ android {
 }
 
 dependencies {
-  implementation("androidx.core:core-ktx:1.19.0")
-  implementation("androidx.appcompat:appcompat:1.7.1")
+  implementation("androidx.core:core-ktx:1.19.1")
+  implementation("androidx.appcompat:appcompat:1.8.0")
   implementation("com.google.android.material:material:1.14.0")
 
   // Compose
@@ -66,7 +66,7 @@ dependencies {
 
   // DataStore
   implementation("androidx.datastore:datastore:1.2.1")
-  implementation("com.google.protobuf:protobuf-kotlin-lite:4.36.0")
+  implementation("com.google.protobuf:protobuf-kotlin-lite:4.36.2")
 
   // Coroutines
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
@@ -82,7 +82,7 @@ dependencies {
 }
 
 protobuf {
-  protoc { artifact = "com.google.protobuf:protoc:4.36.0" }
+  protoc { artifact = "com.google.protobuf:protoc:4.36.2" }
   generateProtoTasks {
     all().forEach { task ->
       task.builtins {
