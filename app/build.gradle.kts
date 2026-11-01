@@ -49,7 +49,7 @@ dependencies {
 
   // Compose
   implementation("androidx.activity:activity-compose:1.13.0")
-  implementation(platform("androidx.compose:compose-bom:2026.06.01"))
+  implementation(platform("androidx.compose:compose-bom:2026.09.00"))
   implementation("androidx.compose.ui:ui")
   implementation("androidx.compose.material3:material3")
   implementation("androidx.compose.ui:ui-tooling-preview")
@@ -58,7 +58,7 @@ dependencies {
   implementation("androidx.health.connect:connect-client:1.2.0-alpha06")
 
   // WorkManager
-  implementation("androidx.work:work-runtime-ktx:2.11.2")
+  implementation("androidx.work:work-runtime-ktx:2.12.0")
 
   // Jetpack Glance
   implementation("androidx.glance:glance-appwidget:1.1.1")
