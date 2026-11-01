@@ -65,7 +65,7 @@ dependencies {
   implementation("androidx.glance:glance-material3:1.1.1")
 
   // DataStore
-  implementation("androidx.datastore:datastore:1.2.1")
+  implementation("androidx.datastore:datastore:1.3.0")
   implementation("com.google.protobuf:protobuf-kotlin-lite:4.36.2")
 
   // Coroutines
