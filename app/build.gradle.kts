@@ -58,7 +58,7 @@ dependencies {
   implementation("androidx.health.connect:connect-client:1.2.0-alpha06")
 
   // WorkManager
-  implementation("androidx.work:work-runtime-ktx:2.11.2")
+  implementation("androidx.work:work-runtime-ktx:2.12.0")
 
   // Jetpack Glance
   implementation("androidx.glance:glance-appwidget:1.1.1")
