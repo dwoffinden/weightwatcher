@@ -1,17 +1,17 @@
-# WeightWatcher Android
+# WeightWatcher
 
-A simple Android home screen widget app that tracks when your last weight log in Health Connect was.
+A simple Android home screen widget that tracks when your last weight log in Health Connect was.
 
 ## Features
 
 - **1x1 Home Screen Widget**: Displays the number of hours since your last recorded weight.
 - **Dynamic Indicators**: Shows a big green ✅ if you've logged your weight within the last 20 hours, and a red ❌ if it's been longer.
-- **Background Sync**: Uses Android Jetpack `WorkManager` & the Health Connect Changelog API to seamlessly update. It polls the changelog instead of blindly fetching everything.
+- **Background Sync**: Uses Android Jetpack `WorkManager` & the Health Connect [Changelog API](https://developer.android.com/reference/android/health/connect/HealthConnectManager#getChangeLogs(android.health.connect.changelog.ChangeLogsRequest,%20java.util.concurrent.Executor,%20android.os.OutcomeReceiver%3Candroid.health.connect.changelog.ChangeLogsResponse,android.health.connect.HealthConnectException%3E)) to seamlessly update. It polls the changelog instead of blindly fetching everything.
 - **Instant Refresh**: Tap anywhere on the widget to trigger an immediate background refresh.
 
 ## Project Structure
 
-- `flake.nix` & `direnv`: Nix environment ensuring hermetic, reproducible Android dev tools (JDK 21, Android SDK 35).
+- `flake.nix` & `direnv`: Nix environment ensuring hermetic, reproducible Android dev tools (JDK 25, Android SDK 35).
 - `app/src/main/java/.../MainActivity.kt`: A modern Jetpack Compose Activity handling the `READ_WEIGHT` permission request cleanly.
 - `app/src/main/java/.../WeightWidgetProvider.kt`: Implements `AppWidgetProvider` for rendering the native XML `weight_widget_layout.xml` on the launcher.
 - `app/src/main/java/.../WeightWorker.kt`: A Coroutine Worker executing periodic updates using `HealthConnectClient`. It fetches a `ChangesToken`, safely iterates Health Connect `UpsertionChange`, and updates the local shared preferences.
