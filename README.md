@@ -33,6 +33,7 @@ An Android home screen widget that shows how many hours ago your weight was last
         │       └── widget_state.proto           # Per-widget state (timestamp and sync/auth status)
         └── test/java/dev/daw/weightwatcher/
             ├── MainActivityTest.kt              # Robolectric Compose UI test
+            ├── TimestampsTest.kt                # Instant/Timestamp conversion unit tests
             └── WeightWorkerTest.kt              # SyncManager change-processing unit tests
 ```
 
