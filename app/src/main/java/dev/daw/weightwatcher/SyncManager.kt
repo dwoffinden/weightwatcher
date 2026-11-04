@@ -78,19 +78,23 @@ class SyncManager(
           Log.i("SyncManager", "Initial load found no weight records")
         }
       } else {
-        val changesResponse = healthConnectClient.getChanges(changesToken)
-        if (changesResponse.changesTokenExpired) {
-          Log.i("SyncManager", "Changes token expired, clearing and retrying")
-          context.dataStore.updateData { it.copy { clearChangesToken() } }
-          return Result.failure(Exception("Token expired"))
-        }
+        var currentToken: String = changesToken
+        do {
+          val changesResponse = healthConnectClient.getChanges(currentToken)
+          if (changesResponse.changesTokenExpired) {
+            Log.i("SyncManager", "Changes token expired, clearing and retrying")
+            context.dataStore.updateData { it.copy { clearChangesToken() } }
+            return Result.failure(Exception("Token expired"))
+          }
 
-        Log.i("SyncManager", "Fetched ${changesResponse.changes.size} changes")
+          Log.i("SyncManager", "Fetched ${changesResponse.changes.size} changes")
 
-        val latestFromChanges = getLatestWeightTimeFromChanges(changesResponse.changes)
-        lastWeightTimeInstant =
-          maxOf(lastWeightTimeInstant, latestFromChanges, nullsFirst(naturalOrder()))
-        changesToken = changesResponse.nextChangesToken
+          val latestFromChanges = getLatestWeightTimeFromChanges(changesResponse.changes)
+          lastWeightTimeInstant =
+            maxOf(lastWeightTimeInstant, latestFromChanges, nullsFirst(naturalOrder()))
+          currentToken = changesResponse.nextChangesToken
+        } while (changesResponse.hasMore)
+        changesToken = currentToken
       }
 
       // Save state
