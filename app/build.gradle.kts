@@ -27,10 +27,7 @@ android {
     }
   }
 
-  buildFeatures {
-    compose = true
-    viewBinding = true
-  }
+  buildFeatures { compose = true }
 
   kotlin { jvmToolchain(25) }
 
@@ -44,8 +41,6 @@ android {
 
 dependencies {
   implementation("androidx.core:core-ktx:1.19.1")
-  implementation("androidx.appcompat:appcompat:1.8.0")
-  implementation("com.google.android.material:material:1.14.0")
 
   // Compose
   implementation("androidx.activity:activity-compose:1.13.0")
