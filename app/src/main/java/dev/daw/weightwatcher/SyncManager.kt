@@ -28,119 +28,12 @@ private val Context.dataStore: DataStore<SyncSettings> by
   )
 
 class SyncManager(
-  private val context: Context,
+  private val dataStore: DataStore<SyncSettings>,
+  healthConnectClientProvider: () -> HealthConnectClient,
+  private val updateWidgets:
+    suspend (lastWeightTime: Instant?, hasPermissions: Boolean, isSyncing: Boolean) -> Unit,
   private val clock: InstantSource = InstantSource.system(),
 ) {
-  private val healthConnectClient by lazy { HealthConnectClient.getOrCreate(context) }
-
-  val lastWeightTime: Flow<Instant?> =
-    context.dataStore.data.map { settings -> settings.lastWeightTimeOrNull?.toInstant() }
-
-  suspend fun performSync(): Result<Unit> {
-    val granted = healthConnectClient.permissionController.getGrantedPermissions()
-
-    if (!granted.containsAll(REQUIRED_PERMISSIONS)) {
-      Log.i("SyncManager", "Permissions not granted, updating widget to Auth state")
-      WeightGlanceWidget.updateAllEntries(context, null, hasPermissions = false, isSyncing = false)
-      return Result.success(Unit)
-    }
-
-    val settings: SyncSettings = context.dataStore.data.first()
-    var changesToken: String? = settings.changesToken.takeIf { it.isNotEmpty() }
-    var lastWeightTimeInstant: Instant? = settings.lastWeightTimeOrNull?.toInstant()
-
-    Log.i("SyncManager", "Starting Health Connect sync")
-    WeightGlanceWidget.updateAllEntries(
-      context,
-      lastWeightTimeInstant,
-      hasPermissions = true,
-      isSyncing = true,
-    )
-
-    try {
-      if (changesToken == null) {
-        val tokenRequest = ChangesTokenRequest(recordTypes = setOf(WeightRecord::class))
-        changesToken = healthConnectClient.getChangesToken(tokenRequest)
-
-        val response =
-          healthConnectClient.readRecords(
-            ReadRecordsRequest(
-              WeightRecord::class,
-              timeRangeFilter = TimeRangeFilter.between(Instant.EPOCH, clock.instant()),
-              ascendingOrder = false,
-              pageSize = 1,
-            )
-          )
-        if (response.records.isNotEmpty()) {
-          lastWeightTimeInstant = response.records.single().time
-          Log.i("SyncManager", "Initial load found record at $lastWeightTimeInstant")
-        } else {
-          Log.i("SyncManager", "Initial load found no weight records")
-        }
-      } else {
-        var currentToken: String = changesToken
-        do {
-          val changesResponse = healthConnectClient.getChanges(currentToken)
-          if (changesResponse.changesTokenExpired) {
-            Log.i("SyncManager", "Changes token expired, clearing and retrying")
-            context.dataStore.updateData { it.copy { clearChangesToken() } }
-            return Result.failure(Exception("Token expired"))
-          }
-
-          Log.i("SyncManager", "Fetched ${changesResponse.changes.size} changes")
-
-          val latestFromChanges = getLatestWeightTimeFromChanges(changesResponse.changes)
-          lastWeightTimeInstant =
-            maxOf(lastWeightTimeInstant, latestFromChanges, nullsFirst(naturalOrder()))
-          currentToken = changesResponse.nextChangesToken
-        } while (changesResponse.hasMore)
-        changesToken = currentToken
-      }
-
-      // Save state
-      context.dataStore.updateData { currentSettings ->
-        currentSettings.copy {
-          this.changesToken = changesToken
-          if (lastWeightTimeInstant != null) {
-            this.lastWeightTime = lastWeightTimeInstant.toTimestamp()
-          } else {
-            clearLastWeightTime()
-          }
-        }
-      }
-
-      // Update UI
-      WeightGlanceWidget.updateAllEntries(
-        context,
-        lastWeightTimeInstant,
-        hasPermissions = true,
-        isSyncing = false,
-      )
-
-      return Result.success(Unit)
-    } catch (e: SecurityException) {
-      Log.e(
-        "SyncManager",
-        "SecurityException: Missing permissions for background read? ${e.message}",
-      )
-      WeightGlanceWidget.updateAllEntries(context, null, hasPermissions = false, isSyncing = false)
-      return Result.failure(e)
-    } catch (e: Exception) {
-      Log.e("SyncManager", "Error updating weight: ${e.message}", e)
-      WeightGlanceWidget.updateAllEntries(
-        context,
-        lastWeightTimeInstant,
-        hasPermissions = true,
-        isSyncing = false,
-      )
-      return Result.failure(e)
-    }
-  }
-
-  suspend fun resetGlanceWidget() {
-    WeightGlanceWidget.resetAll(context)
-  }
-
   companion object {
     val REQUIRED_PERMISSIONS =
       setOf(
@@ -155,5 +48,127 @@ class SyncManager(
         .map { it.record }
         .filterIsInstance<WeightRecord>()
         .maxOfOrNull { it.time }
+  }
+
+  private val healthConnectClient: HealthConnectClient by lazy(healthConnectClientProvider)
+
+  val lastWeightTime: Flow<Instant?> =
+    dataStore.data.map { settings -> settings.lastWeightTimeOrNull?.toInstant() }
+
+  constructor(
+    context: Context,
+    clock: InstantSource = InstantSource.system(),
+  ) : this(
+    dataStore = context.applicationContext.dataStore,
+    healthConnectClientProvider = { HealthConnectClient.getOrCreate(context.applicationContext) },
+    updateWidgets = { lastWeightTime, hasPermissions, isSyncing ->
+      WeightGlanceWidget.updateAllEntries(
+        context.applicationContext,
+        lastWeightTime,
+        hasPermissions,
+        isSyncing,
+      )
+    },
+    clock = clock,
+  )
+
+  suspend fun performSync(): Result<Unit> {
+    val granted = healthConnectClient.permissionController.getGrantedPermissions()
+
+    if (!granted.containsAll(REQUIRED_PERMISSIONS)) {
+      Log.i("SyncManager", "Permissions not granted, updating widget to Auth state")
+      updateWidgets(null, false, false)
+      return Result.success(Unit)
+    }
+
+    val settings: SyncSettings = dataStore.data.first()
+    val previousWeightTime: Instant? = settings.lastWeightTimeOrNull?.toInstant()
+
+    Log.i("SyncManager", "Starting Health Connect sync")
+    updateWidgets(previousWeightTime, true, true)
+
+    val nextSettings: SyncSettings? =
+      try {
+        fetchNextSyncSettings(settings)
+      } catch (e: SecurityException) {
+        Log.e(
+          "SyncManager",
+          "SecurityException: Missing permissions for background read? ${e.message}",
+        )
+        updateWidgets(null, false, false)
+        return Result.failure(e)
+      } catch (e: Exception) {
+        Log.e("SyncManager", "Error updating weight: ${e.message}", e)
+        updateWidgets(previousWeightTime, true, false)
+        return Result.failure(e)
+      }
+
+    if (nextSettings == null) {
+      Log.i("SyncManager", "Changes token expired, clearing and retrying")
+      dataStore.updateData { it.copy { clearChangesToken() } }
+      updateWidgets(previousWeightTime, true, false)
+      return Result.failure(IllegalStateException("Changes token expired"))
+    }
+
+    dataStore.updateData { nextSettings }
+    updateWidgets(nextSettings.lastWeightTimeOrNull?.toInstant(), true, false)
+    return Result.success(Unit)
+  }
+
+  /**
+   * Fetches the latest weight timestamp and next changes token from Health Connect, or returns
+   * `null` if the current changes token has expired.
+   */
+  private suspend fun fetchNextSyncSettings(settings: SyncSettings): SyncSettings? {
+    val existingToken: String? = settings.changesToken.takeIf { it.isNotEmpty() }
+    var lastWeightTimeInstant: Instant? = settings.lastWeightTimeOrNull?.toInstant()
+    val nextToken: String
+
+    if (existingToken == null) {
+      nextToken =
+        healthConnectClient.getChangesToken(
+          ChangesTokenRequest(recordTypes = setOf(WeightRecord::class))
+        )
+      val response =
+        healthConnectClient.readRecords(
+          ReadRecordsRequest(
+            WeightRecord::class,
+            timeRangeFilter = TimeRangeFilter.between(Instant.EPOCH, clock.instant()),
+            ascendingOrder = false,
+            pageSize = 1,
+          )
+        )
+      if (response.records.isNotEmpty()) {
+        lastWeightTimeInstant = response.records.single().time
+        Log.i("SyncManager", "Initial load found record at $lastWeightTimeInstant")
+      } else {
+        Log.i("SyncManager", "Initial load found no weight records")
+      }
+    } else {
+      var currentToken: String = existingToken
+      do {
+        val changesResponse = healthConnectClient.getChanges(currentToken)
+        if (changesResponse.changesTokenExpired) {
+          return null
+        }
+
+        Log.i("SyncManager", "Fetched ${changesResponse.changes.size} changes")
+
+        val latestFromChanges = getLatestWeightTimeFromChanges(changesResponse.changes)
+        lastWeightTimeInstant =
+          maxOf(lastWeightTimeInstant, latestFromChanges, nullsFirst(naturalOrder()))
+        currentToken = changesResponse.nextChangesToken
+      } while (changesResponse.hasMore)
+      nextToken = currentToken
+    }
+
+    return settings.copy {
+      changesToken = nextToken
+      if (lastWeightTimeInstant != null) {
+        lastWeightTime = lastWeightTimeInstant.toTimestamp()
+      } else {
+        clearLastWeightTime()
+      }
+    }
   }
 }
