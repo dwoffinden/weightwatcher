@@ -1,7 +1,6 @@
 package dev.daw.weightwatcher
 
 import android.content.Context
-import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -9,7 +8,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import java.util.concurrent.TimeUnit
 
 class WeightWorker(appContext: Context, workerParams: WorkerParameters) :
   CoroutineWorker(appContext, workerParams) {
@@ -29,11 +27,11 @@ class WeightWorker(appContext: Context, workerParams: WorkerParameters) :
     private const val WORK_NAME = "WeightPeriodicSync"
 
     fun enqueuePeriodicWork(context: Context) {
-      val constraints = Constraints.Builder().build()
-
       val periodicWorkRequest =
-        PeriodicWorkRequestBuilder<WeightWorker>(30, TimeUnit.MINUTES, 15, TimeUnit.MINUTES)
-          .setConstraints(constraints)
+        PeriodicWorkRequestBuilder<WeightWorker>(
+            repeatInterval = 30.minutes,
+            flexTimeInterval = 15.minutes,
+          )
           .build()
 
       WorkManager.getInstance(context)
