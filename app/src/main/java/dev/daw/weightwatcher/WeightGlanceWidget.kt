@@ -42,8 +42,10 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import java.io.File
 import java.time.Instant
+import java.time.InstantSource
 
-class WeightGlanceWidget : GlanceAppWidget() {
+class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system()) :
+    GlanceAppWidget() {
   override val stateDefinition: GlanceStateDefinition<WidgetState> = WidgetStateDefinition
 
   override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -70,7 +72,8 @@ class WeightGlanceWidget : GlanceAppWidget() {
       hasPermissions: Boolean,
       isSyncing: Boolean,
   ) {
-    val hoursStale = lastWeightTime?.let { (Instant.now() - it).toHours() }
+    val hoursStale: Long? =
+        if (lastWeightTime != null) (clock.instant() - lastWeightTime).toHours() else null
     val backgroundColor =
         ColorProvider(
             day = dynamicLightColorScheme(context).surfaceContainer.copy(alpha = 0.8f),

@@ -13,6 +13,7 @@ import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import java.time.Instant
+import java.time.InstantSource
 import kotlin.comparisons.naturalOrder
 import kotlin.comparisons.nullsFirst
 import kotlinx.coroutines.flow.Flow
@@ -26,7 +27,10 @@ private val Context.dataStore: DataStore<SyncSettings> by
         serializer = ProtoSerializer(SyncSettings.getDefaultInstance(), SyncSettings.parser()),
     )
 
-class SyncManager(private val context: Context) {
+class SyncManager(
+    private val context: Context,
+    private val clock: InstantSource = InstantSource.system(),
+) {
   private val healthConnectClient by lazy { HealthConnectClient.getOrCreate(context) }
 
   val lastWeightTime: Flow<Instant?> =
@@ -44,7 +48,7 @@ class SyncManager(private val context: Context) {
     Log.i("SyncManager", "Starting Health Connect sync")
     WeightGlanceWidget.updateAllEntries(context, null, hasPermissions = true, isSyncing = true)
 
-    val settings = context.dataStore.data.first()
+    val settings: SyncSettings = context.dataStore.data.first()
     var changesToken: String? = settings.changesToken.takeIf { it.isNotEmpty() }
     var lastWeightTimeInstant: Instant? = settings.lastWeightTimeOrNull?.toInstant()
 
@@ -57,7 +61,7 @@ class SyncManager(private val context: Context) {
             healthConnectClient.readRecords(
                 ReadRecordsRequest(
                     WeightRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(Instant.EPOCH, Instant.now()),
+                    timeRangeFilter = TimeRangeFilter.between(Instant.EPOCH, clock.instant()),
                     ascendingOrder = false,
                     pageSize = 1,
                 )
