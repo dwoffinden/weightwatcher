@@ -110,7 +110,6 @@
           # gradle.properties is generated into the Nix store and symlinked at
           # shell entry so Gradle sees the correct SDK and JDK store paths.
           gradleProperties = pkgs.writeText "gradle.properties" ''
-            android.useAndroidX=true
             android.aapt2FromMavenOverride=${androidSdk}/libexec/android-sdk/build-tools/${buildToolsVersion}/aapt2
             org.gradle.java.home=${jdk}/lib/openjdk
             org.gradle.jvmargs=-Xmx4096m -XX:+HeapDumpOnOutOfMemoryError
@@ -119,7 +118,6 @@
             org.gradle.configureondemand=true
           '';
           ciGradleProperties = pkgs.writeText "gradle.properties" ''
-            android.useAndroidX=true
             android.aapt2FromMavenOverride=${ciAndroidSdk}/libexec/android-sdk/build-tools/${buildToolsVersion}/aapt2
             org.gradle.java.home=${jdk}/lib/openjdk
             org.gradle.jvmargs=-Xmx4096m -XX:+HeapDumpOnOutOfMemoryError
