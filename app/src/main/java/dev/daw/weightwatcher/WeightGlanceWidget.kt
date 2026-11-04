@@ -1,14 +1,17 @@
 package dev.daw.weightwatcher
 
 import android.content.Context
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.dataStoreFile
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.action.ActionParameters
@@ -18,10 +21,13 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.appWidgetBackground
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.appwidget.updateAll
 import androidx.glance.background
+import androidx.glance.color.ColorProvider
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
@@ -34,7 +40,6 @@ import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import java.io.File
 import java.time.Instant
 
@@ -47,12 +52,14 @@ class WeightGlanceWidget : GlanceAppWidget() {
       val lastWeightTime = state.lastWeightTimeOrNull?.toInstant()
       val status = state.status
 
-      WidgetContent(
-          context,
-          lastWeightTime,
-          hasPermissions = status != WidgetState.Status.NO_PERMISSIONS,
-          isSyncing = status == WidgetState.Status.SYNCING,
-      )
+      GlanceTheme {
+        WidgetContent(
+            context,
+            lastWeightTime,
+            hasPermissions = status != WidgetState.Status.NO_PERMISSIONS,
+            isSyncing = status == WidgetState.Status.SYNCING,
+        )
+      }
     }
   }
 
@@ -64,11 +71,18 @@ class WeightGlanceWidget : GlanceAppWidget() {
       isSyncing: Boolean,
   ) {
     val hoursStale = lastWeightTime?.let { (Instant.now() - it).toHours() }
+    val backgroundColor =
+        ColorProvider(
+            day = dynamicLightColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
+            night = dynamicDarkColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
+        )
 
     Column(
         modifier =
             GlanceModifier.fillMaxSize()
-                .background(ImageProvider(R.drawable.widget_bg))
+                .appWidgetBackground()
+                .cornerRadius(android.R.dimen.system_app_widget_background_radius)
+                .background(backgroundColor)
                 .padding(8.dp)
                 .clickable(
                     if (!hasPermissions) {
@@ -82,11 +96,18 @@ class WeightGlanceWidget : GlanceAppWidget() {
     ) {
       val iconRes =
           when {
-            isSyncing -> android.R.drawable.stat_notify_sync
-            !hasPermissions -> android.R.drawable.ic_dialog_alert
-            hoursStale == null -> android.R.drawable.ic_menu_help
-            hoursStale <= 20 -> R.drawable.ic_check_green
-            else -> R.drawable.ic_close_red
+            isSyncing -> R.drawable.ic_sync
+            !hasPermissions -> R.drawable.ic_warning
+            hoursStale == null -> R.drawable.ic_help
+            hoursStale <= 20 -> R.drawable.ic_check
+            else -> R.drawable.ic_close
+          }
+
+      val iconTint =
+          when {
+            isSyncing || hoursStale == null -> GlanceTheme.colors.onSurfaceVariant
+            !hasPermissions || hoursStale > 20 -> GlanceTheme.colors.error
+            else -> GlanceTheme.colors.primary
           }
 
       val text =
@@ -100,16 +121,13 @@ class WeightGlanceWidget : GlanceAppWidget() {
       Image(
           provider = ImageProvider(iconRes),
           contentDescription = "Status",
+          colorFilter = ColorFilter.tint(iconTint),
           modifier = GlanceModifier.size(32.dp),
       )
       Spacer(modifier = GlanceModifier.height(4.dp))
       Text(
           text = text,
-          style =
-              TextStyle(
-                  fontWeight = FontWeight.Bold,
-                  color = ColorProvider(Color.White),
-              ),
+          style = TextStyle(fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
       )
     }
   }
