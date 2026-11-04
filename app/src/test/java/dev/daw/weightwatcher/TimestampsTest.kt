@@ -16,6 +16,16 @@ import org.junit.runner.RunWith
 class TimestampsTest {
 
   @Test
+  fun intHours_returnsDuration() {
+    assertThat(20.hours).isEqualTo(Duration.ofHours(20))
+  }
+
+  @Test
+  fun longHours_returnsDuration() {
+    assertThat(20L.hours).isEqualTo(Duration.ofHours(20))
+  }
+
+  @Test
   fun intMinutes_returnsDuration() {
     assertThat(15.minutes).isEqualTo(Duration.ofMinutes(15))
   }

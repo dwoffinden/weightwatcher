@@ -41,101 +41,16 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import java.io.File
+import java.time.Duration
 import java.time.Instant
 import java.time.InstantSource
 
 class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system()) :
   GlanceAppWidget() {
-  override val stateDefinition: GlanceStateDefinition<WidgetState> = WidgetStateDefinition
-
-  override suspend fun provideGlance(context: Context, id: GlanceId) {
-    provideContent {
-      val state = currentState<WidgetState>()
-      val lastWeightTime = state.lastWeightTimeOrNull?.toInstant()
-      val status = state.status
-
-      GlanceTheme {
-        WidgetContent(
-          context,
-          lastWeightTime,
-          hasPermissions = status != WidgetState.Status.NO_PERMISSIONS,
-          isSyncing = status == WidgetState.Status.SYNCING,
-        )
-      }
-    }
-  }
-
-  @Composable
-  private fun WidgetContent(
-    context: Context,
-    lastWeightTime: Instant?,
-    hasPermissions: Boolean,
-    isSyncing: Boolean,
-  ) {
-    val hoursStale: Long? =
-      if (lastWeightTime != null) (clock.instant() - lastWeightTime).toHours() else null
-    val backgroundColor =
-      ColorProvider(
-        day = dynamicLightColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
-        night = dynamicDarkColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
-      )
-
-    Column(
-      modifier =
-        GlanceModifier.fillMaxSize()
-          .appWidgetBackground()
-          .cornerRadius(android.R.dimen.system_app_widget_background_radius)
-          .background(backgroundColor)
-          .padding(8.dp)
-          .clickable(
-            if (!hasPermissions) {
-              actionStartActivity<MainActivity>()
-            } else {
-              actionRunCallback<RefreshCallback>()
-            }
-          ),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-      val iconRes =
-        when {
-          isSyncing -> R.drawable.ic_sync
-          !hasPermissions -> R.drawable.ic_warning
-          hoursStale == null -> R.drawable.ic_help
-          hoursStale <= 20 -> R.drawable.ic_check
-          else -> R.drawable.ic_close
-        }
-
-      val iconTint =
-        when {
-          isSyncing || hoursStale == null -> GlanceTheme.colors.onSurfaceVariant
-          !hasPermissions || hoursStale > 20 -> GlanceTheme.colors.error
-          else -> GlanceTheme.colors.primary
-        }
-
-      val text =
-        when {
-          isSyncing -> "Sync..."
-          !hasPermissions -> "Auth"
-          hoursStale == null -> "None"
-          else -> "${hoursStale}h"
-        }
-
-      Image(
-        provider = ImageProvider(iconRes),
-        contentDescription = "Status",
-        colorFilter = ColorFilter.tint(iconTint),
-        modifier = GlanceModifier.size(32.dp),
-      )
-      Spacer(modifier = GlanceModifier.height(4.dp))
-      Text(
-        text = text,
-        style = TextStyle(fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
-      )
-    }
-  }
 
   companion object {
+    private val STALE_THRESHOLD: Duration = 20.hours
+
     /** Updates the state for all instances of this widget. */
     suspend fun updateAllEntries(
       context: Context,
@@ -185,21 +100,106 @@ class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system
       lastWeightTime: Instant?,
       hasPermissions: Boolean = true,
       isSyncing: Boolean = false,
-    ): WidgetState =
-      WidgetState.newBuilder()
-        .apply {
-          if (lastWeightTime != null) {
-            setLastWeightTime(lastWeightTime.toTimestamp())
-          }
-          setStatus(
-            when {
-              isSyncing -> WidgetState.Status.SYNCING
-              !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
-              else -> WidgetState.Status.OK
-            }
-          )
+    ): WidgetState = widgetState {
+      if (lastWeightTime != null) {
+        this.lastWeightTime = lastWeightTime.toTimestamp()
+      }
+      status =
+        when {
+          isSyncing -> WidgetState.Status.SYNCING
+          !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
+          else -> WidgetState.Status.OK
         }
-        .build()
+    }
+  }
+
+  override val stateDefinition: GlanceStateDefinition<WidgetState> = WidgetStateDefinition
+
+  override suspend fun provideGlance(context: Context, id: GlanceId) {
+    provideContent {
+      val state = currentState<WidgetState>()
+      val lastWeightTime = state.lastWeightTimeOrNull?.toInstant()
+      val status = state.status
+
+      GlanceTheme {
+        WidgetContent(
+          context,
+          lastWeightTime,
+          hasPermissions = status != WidgetState.Status.NO_PERMISSIONS,
+          isSyncing = status == WidgetState.Status.SYNCING,
+        )
+      }
+    }
+  }
+
+  @Composable
+  private fun WidgetContent(
+    context: Context,
+    lastWeightTime: Instant?,
+    hasPermissions: Boolean,
+    isSyncing: Boolean,
+  ) {
+    val staleness: Duration? =
+      if (lastWeightTime != null) clock.instant() - lastWeightTime else null
+    val backgroundColor =
+      ColorProvider(
+        day = dynamicLightColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
+        night = dynamicDarkColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
+      )
+
+    Column(
+      modifier =
+        GlanceModifier.fillMaxSize()
+          .appWidgetBackground()
+          .cornerRadius(android.R.dimen.system_app_widget_background_radius)
+          .background(backgroundColor)
+          .padding(8.dp)
+          .clickable(
+            if (!hasPermissions) {
+              actionStartActivity<MainActivity>()
+            } else {
+              actionRunCallback<RefreshCallback>()
+            }
+          ),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+      val iconRes =
+        when {
+          isSyncing -> R.drawable.ic_sync
+          !hasPermissions -> R.drawable.ic_warning
+          staleness == null -> R.drawable.ic_help
+          staleness <= STALE_THRESHOLD -> R.drawable.ic_check
+          else -> R.drawable.ic_close
+        }
+
+      val iconTint =
+        when {
+          isSyncing || staleness == null -> GlanceTheme.colors.onSurfaceVariant
+          !hasPermissions || staleness > STALE_THRESHOLD -> GlanceTheme.colors.error
+          else -> GlanceTheme.colors.primary
+        }
+
+      val text =
+        when {
+          isSyncing -> "Sync..."
+          !hasPermissions -> "Auth"
+          staleness == null -> "None"
+          else -> "${staleness.toHours()}h"
+        }
+
+      Image(
+        provider = ImageProvider(iconRes),
+        contentDescription = "Status",
+        colorFilter = ColorFilter.tint(iconTint),
+        modifier = GlanceModifier.size(32.dp),
+      )
+      Spacer(modifier = GlanceModifier.height(4.dp))
+      Text(
+        text = text,
+        style = TextStyle(fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
+      )
+    }
   }
 }
 
