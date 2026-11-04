@@ -8,7 +8,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
+import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -59,8 +59,8 @@ class MainActivity : ComponentActivity() {
       }
     Log.i("MainActivity", "Health Connect SDK Status: $sdkStatus")
     var hasPermissions by remember { mutableStateOf(false) }
-    val syncManager = remember { SyncManager(this) }
-    val lastWeightTime by syncManager.lastWeightTime.collectAsState(initial = null)
+    val syncManager = remember { SyncManager(applicationContext) }
+    val lastWeightTime: Instant? by syncManager.lastWeightTime.collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
 
     val requestPermissionActivityContract =
@@ -89,8 +89,6 @@ class MainActivity : ComponentActivity() {
       }
     }
 
-    // SharedPreferences listener logic removed in favor of SyncManager's lastWeightTime Flow
-
     WeightWatcherTheme {
       Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -111,18 +109,18 @@ class MainActivity : ComponentActivity() {
                 else -> "Health Connect status: $sdkStatus"
               }
             Text(errorMessage, color = MaterialTheme.colorScheme.error)
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { /* Open Play Store? */ }) { Text("Check Health Connect") }
           } else if (hasPermissions) {
             Text("Permissions granted! 😊")
             Spacer(modifier = Modifier.height(16.dp))
 
-            lastWeightTime?.let { time ->
-              val formatter =
+            val currentLastWeightTime: Instant? = lastWeightTime
+            if (currentLastWeightTime != null) {
+              val formatter = remember {
                 DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
                   .withZone(ZoneId.systemDefault())
+              }
               Text(
-                "Last weight log found: ${formatter.format(time)}",
+                "Last weight log found: ${formatter.format(currentLastWeightTime)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.secondary,
               )
@@ -164,28 +162,6 @@ class MainActivity : ComponentActivity() {
             ) {
               Text("Grant Permissions")
             }
-          }
-        }
-      }
-    }
-  }
-}
-
-class PermissionsRationaleActivity : ComponentActivity() {
-  override fun onCreate(savedInstanceState: Bundle?) {
-    enableEdgeToEdge()
-    super.onCreate(savedInstanceState)
-    Log.i("PermissionsRationaleActivity", "onCreate called")
-    setContent {
-      WeightWatcherTheme {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-          Box(
-            modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),
-            contentAlignment = Alignment.Center,
-          ) {
-            Text(
-              "This app needs permission to read weight from Health Connect to display staleness on the widget."
-            )
           }
         }
       }
