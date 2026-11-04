@@ -45,12 +45,17 @@ class SyncManager(
       return Result.success(Unit)
     }
 
-    Log.i("SyncManager", "Starting Health Connect sync")
-    WeightGlanceWidget.updateAllEntries(context, null, hasPermissions = true, isSyncing = true)
-
     val settings: SyncSettings = context.dataStore.data.first()
     var changesToken: String? = settings.changesToken.takeIf { it.isNotEmpty() }
     var lastWeightTimeInstant: Instant? = settings.lastWeightTimeOrNull?.toInstant()
+
+    Log.i("SyncManager", "Starting Health Connect sync")
+    WeightGlanceWidget.updateAllEntries(
+      context,
+      lastWeightTimeInstant,
+      hasPermissions = true,
+      isSyncing = true,
+    )
 
     try {
       if (changesToken == null) {
@@ -118,7 +123,12 @@ class SyncManager(
       return Result.failure(e)
     } catch (e: Exception) {
       Log.e("SyncManager", "Error updating weight: ${e.message}", e)
-      WeightGlanceWidget.updateAllEntries(context, null, hasPermissions = true, isSyncing = false)
+      WeightGlanceWidget.updateAllEntries(
+        context,
+        lastWeightTimeInstant,
+        hasPermissions = true,
+        isSyncing = false,
+      )
       return Result.failure(e)
     }
   }
