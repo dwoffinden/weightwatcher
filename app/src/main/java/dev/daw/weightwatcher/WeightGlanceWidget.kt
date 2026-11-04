@@ -45,7 +45,7 @@ import java.time.Instant
 import java.time.InstantSource
 
 class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system()) :
-    GlanceAppWidget() {
+  GlanceAppWidget() {
   override val stateDefinition: GlanceStateDefinition<WidgetState> = WidgetStateDefinition
 
   override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -56,10 +56,10 @@ class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system
 
       GlanceTheme {
         WidgetContent(
-            context,
-            lastWeightTime,
-            hasPermissions = status != WidgetState.Status.NO_PERMISSIONS,
-            isSyncing = status == WidgetState.Status.SYNCING,
+          context,
+          lastWeightTime,
+          hasPermissions = status != WidgetState.Status.NO_PERMISSIONS,
+          isSyncing = status == WidgetState.Status.SYNCING,
         )
       }
     }
@@ -67,70 +67,70 @@ class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system
 
   @Composable
   private fun WidgetContent(
-      context: Context,
-      lastWeightTime: Instant?,
-      hasPermissions: Boolean,
-      isSyncing: Boolean,
+    context: Context,
+    lastWeightTime: Instant?,
+    hasPermissions: Boolean,
+    isSyncing: Boolean,
   ) {
     val hoursStale: Long? =
-        if (lastWeightTime != null) (clock.instant() - lastWeightTime).toHours() else null
+      if (lastWeightTime != null) (clock.instant() - lastWeightTime).toHours() else null
     val backgroundColor =
-        ColorProvider(
-            day = dynamicLightColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
-            night = dynamicDarkColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
-        )
+      ColorProvider(
+        day = dynamicLightColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
+        night = dynamicDarkColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
+      )
 
     Column(
-        modifier =
-            GlanceModifier.fillMaxSize()
-                .appWidgetBackground()
-                .cornerRadius(android.R.dimen.system_app_widget_background_radius)
-                .background(backgroundColor)
-                .padding(8.dp)
-                .clickable(
-                    if (!hasPermissions) {
-                      actionStartActivity<MainActivity>()
-                    } else {
-                      actionRunCallback<RefreshCallback>()
-                    }
-                ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalAlignment = Alignment.CenterHorizontally,
+      modifier =
+        GlanceModifier.fillMaxSize()
+          .appWidgetBackground()
+          .cornerRadius(android.R.dimen.system_app_widget_background_radius)
+          .background(backgroundColor)
+          .padding(8.dp)
+          .clickable(
+            if (!hasPermissions) {
+              actionStartActivity<MainActivity>()
+            } else {
+              actionRunCallback<RefreshCallback>()
+            }
+          ),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalAlignment = Alignment.CenterHorizontally,
     ) {
       val iconRes =
-          when {
-            isSyncing -> R.drawable.ic_sync
-            !hasPermissions -> R.drawable.ic_warning
-            hoursStale == null -> R.drawable.ic_help
-            hoursStale <= 20 -> R.drawable.ic_check
-            else -> R.drawable.ic_close
-          }
+        when {
+          isSyncing -> R.drawable.ic_sync
+          !hasPermissions -> R.drawable.ic_warning
+          hoursStale == null -> R.drawable.ic_help
+          hoursStale <= 20 -> R.drawable.ic_check
+          else -> R.drawable.ic_close
+        }
 
       val iconTint =
-          when {
-            isSyncing || hoursStale == null -> GlanceTheme.colors.onSurfaceVariant
-            !hasPermissions || hoursStale > 20 -> GlanceTheme.colors.error
-            else -> GlanceTheme.colors.primary
-          }
+        when {
+          isSyncing || hoursStale == null -> GlanceTheme.colors.onSurfaceVariant
+          !hasPermissions || hoursStale > 20 -> GlanceTheme.colors.error
+          else -> GlanceTheme.colors.primary
+        }
 
       val text =
-          when {
-            isSyncing -> "Sync..."
-            !hasPermissions -> "Auth"
-            hoursStale == null -> "None"
-            else -> "${hoursStale}h"
-          }
+        when {
+          isSyncing -> "Sync..."
+          !hasPermissions -> "Auth"
+          hoursStale == null -> "None"
+          else -> "${hoursStale}h"
+        }
 
       Image(
-          provider = ImageProvider(iconRes),
-          contentDescription = "Status",
-          colorFilter = ColorFilter.tint(iconTint),
-          modifier = GlanceModifier.size(32.dp),
+        provider = ImageProvider(iconRes),
+        contentDescription = "Status",
+        colorFilter = ColorFilter.tint(iconTint),
+        modifier = GlanceModifier.size(32.dp),
       )
       Spacer(modifier = GlanceModifier.height(4.dp))
       Text(
-          text = text,
-          style = TextStyle(fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
+        text = text,
+        style = TextStyle(fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
       )
     }
   }
@@ -138,10 +138,10 @@ class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system
   companion object {
     /** Updates the state for all instances of this widget. */
     suspend fun updateAllEntries(
-        context: Context,
-        lastWeightTime: Instant?,
-        hasPermissions: Boolean,
-        isSyncing: Boolean,
+      context: Context,
+      lastWeightTime: Instant?,
+      hasPermissions: Boolean,
+      isSyncing: Boolean,
     ) {
       val manager = GlanceAppWidgetManager(context)
       val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
@@ -154,11 +154,11 @@ class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system
               clearLastWeightTime()
             }
             status =
-                when {
-                  isSyncing -> WidgetState.Status.SYNCING
-                  !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
-                  else -> WidgetState.Status.OK
-                }
+              when {
+                isSyncing -> WidgetState.Status.SYNCING
+                !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
+                else -> WidgetState.Status.OK
+              }
           }
         }
       }
@@ -182,43 +182,43 @@ class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system
      * [GlanceAppWidgetManager.requestPinGlanceAppWidget].
      */
     fun createMetadata(
-        lastWeightTime: Instant?,
-        hasPermissions: Boolean = true,
-        isSyncing: Boolean = false,
+      lastWeightTime: Instant?,
+      hasPermissions: Boolean = true,
+      isSyncing: Boolean = false,
     ): WidgetState =
-        WidgetState.newBuilder()
-            .apply {
-              if (lastWeightTime != null) {
-                setLastWeightTime(lastWeightTime.toTimestamp())
-              }
-              setStatus(
-                  when {
-                    isSyncing -> WidgetState.Status.SYNCING
-                    !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
-                    else -> WidgetState.Status.OK
-                  }
-              )
+      WidgetState.newBuilder()
+        .apply {
+          if (lastWeightTime != null) {
+            setLastWeightTime(lastWeightTime.toTimestamp())
+          }
+          setStatus(
+            when {
+              isSyncing -> WidgetState.Status.SYNCING
+              !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
+              else -> WidgetState.Status.OK
             }
-            .build()
+          )
+        }
+        .build()
   }
 }
 
 object WidgetStateDefinition : GlanceStateDefinition<WidgetState> {
   override suspend fun getDataStore(context: Context, fileKey: String): DataStore<WidgetState> =
-      DataStoreFactory.create(
-          serializer = ProtoSerializer(WidgetState.getDefaultInstance(), WidgetState.parser()),
-          produceFile = { getLocation(context, fileKey) },
-      )
+    DataStoreFactory.create(
+      serializer = ProtoSerializer(WidgetState.getDefaultInstance(), WidgetState.parser()),
+      produceFile = { getLocation(context, fileKey) },
+    )
 
   override fun getLocation(context: Context, fileKey: String): File =
-      context.dataStoreFile("widget_state_$fileKey.pb")
+    context.dataStoreFile("widget_state_$fileKey.pb")
 }
 
 class RefreshCallback : ActionCallback {
   override suspend fun onAction(
-      context: Context,
-      glanceId: GlanceId,
-      parameters: ActionParameters,
+    context: Context,
+    glanceId: GlanceId,
+    parameters: ActionParameters,
   ) {
     WeightWorker.enqueueOneTimeWork(context)
   }

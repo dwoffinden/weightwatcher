@@ -22,19 +22,19 @@ import kotlinx.coroutines.flow.map
 
 // TODO: Remove this context extension and inject an explicit singleton via Dagger/Hilt instead.
 private val Context.dataStore: DataStore<SyncSettings> by
-    dataStore(
-        fileName = "sync_settings.pb",
-        serializer = ProtoSerializer(SyncSettings.getDefaultInstance(), SyncSettings.parser()),
-    )
+  dataStore(
+    fileName = "sync_settings.pb",
+    serializer = ProtoSerializer(SyncSettings.getDefaultInstance(), SyncSettings.parser()),
+  )
 
 class SyncManager(
-    private val context: Context,
-    private val clock: InstantSource = InstantSource.system(),
+  private val context: Context,
+  private val clock: InstantSource = InstantSource.system(),
 ) {
   private val healthConnectClient by lazy { HealthConnectClient.getOrCreate(context) }
 
   val lastWeightTime: Flow<Instant?> =
-      context.dataStore.data.map { settings -> settings.lastWeightTimeOrNull?.toInstant() }
+    context.dataStore.data.map { settings -> settings.lastWeightTimeOrNull?.toInstant() }
 
   suspend fun performSync(): Result<Unit> {
     val granted = healthConnectClient.permissionController.getGrantedPermissions()
@@ -58,14 +58,14 @@ class SyncManager(
         changesToken = healthConnectClient.getChangesToken(tokenRequest)
 
         val response =
-            healthConnectClient.readRecords(
-                ReadRecordsRequest(
-                    WeightRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(Instant.EPOCH, clock.instant()),
-                    ascendingOrder = false,
-                    pageSize = 1,
-                )
+          healthConnectClient.readRecords(
+            ReadRecordsRequest(
+              WeightRecord::class,
+              timeRangeFilter = TimeRangeFilter.between(Instant.EPOCH, clock.instant()),
+              ascendingOrder = false,
+              pageSize = 1,
             )
+          )
         if (response.records.isNotEmpty()) {
           lastWeightTimeInstant = response.records.single().time
           Log.i("SyncManager", "Initial load found record at $lastWeightTimeInstant")
@@ -84,7 +84,7 @@ class SyncManager(
 
         val latestFromChanges = getLatestWeightTimeFromChanges(changesResponse.changes)
         lastWeightTimeInstant =
-            maxOf(lastWeightTimeInstant, latestFromChanges, nullsFirst(naturalOrder()))
+          maxOf(lastWeightTimeInstant, latestFromChanges, nullsFirst(naturalOrder()))
         changesToken = changesResponse.nextChangesToken
       }
 
@@ -102,17 +102,17 @@ class SyncManager(
 
       // Update UI
       WeightGlanceWidget.updateAllEntries(
-          context,
-          lastWeightTimeInstant,
-          hasPermissions = true,
-          isSyncing = false,
+        context,
+        lastWeightTimeInstant,
+        hasPermissions = true,
+        isSyncing = false,
       )
 
       return Result.success(Unit)
     } catch (e: SecurityException) {
       Log.e(
-          "SyncManager",
-          "SecurityException: Missing permissions for background read? ${e.message}",
+        "SyncManager",
+        "SecurityException: Missing permissions for background read? ${e.message}",
       )
       WeightGlanceWidget.updateAllEntries(context, null, hasPermissions = false, isSyncing = false)
       return Result.failure(e)
@@ -129,17 +129,17 @@ class SyncManager(
 
   companion object {
     val REQUIRED_PERMISSIONS =
-        setOf(
-            HealthPermission.getReadPermission(WeightRecord::class),
-            HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
-        )
+      setOf(
+        HealthPermission.getReadPermission(WeightRecord::class),
+        HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
+      )
 
     fun getLatestWeightTimeFromChanges(changes: List<Change>): Instant? =
-        changes
-            .asSequence()
-            .filterIsInstance<UpsertionChange>()
-            .map { it.record }
-            .filterIsInstance<WeightRecord>()
-            .maxOfOrNull { it.time }
+      changes
+        .asSequence()
+        .filterIsInstance<UpsertionChange>()
+        .map { it.record }
+        .filterIsInstance<WeightRecord>()
+        .maxOfOrNull { it.time }
   }
 }

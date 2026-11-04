@@ -19,7 +19,7 @@ class MainActivityTest {
   fun appLaunchesAndShowsSetupScreen() {
     composeTestRule.onNodeWithText("WeightWatcher Widget Setup").assertIsDisplayed()
     composeTestRule
-        .onNodeWithText("Health Connect is not supported on this device.")
-        .assertIsDisplayed()
+      .onNodeWithText("Health Connect is not supported on this device.")
+      .assertIsDisplayed()
   }
 }

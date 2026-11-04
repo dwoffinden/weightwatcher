@@ -10,15 +10,15 @@ import java.io.OutputStream
 
 /** A generic DataStore [Serializer] for any Protobuf [MessageLite]. */
 class ProtoSerializer<T : MessageLite>(
-    override val defaultValue: T,
-    private val parser: Parser<T>,
+  override val defaultValue: T,
+  private val parser: Parser<T>,
 ) : Serializer<T> {
   override suspend fun readFrom(input: InputStream): T =
-      try {
-        parser.parseFrom(input)
-      } catch (exception: InvalidProtocolBufferException) {
-        throw CorruptionException("Cannot read proto.", exception)
-      }
+    try {
+      parser.parseFrom(input)
+    } catch (exception: InvalidProtocolBufferException) {
+      throw CorruptionException("Cannot read proto.", exception)
+    }
 
   override suspend fun writeTo(t: T, output: OutputStream) = t.writeTo(output)
 }

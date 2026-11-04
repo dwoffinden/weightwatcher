@@ -12,7 +12,7 @@ import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
 
 class WeightWorker(appContext: Context, workerParams: WorkerParameters) :
-    CoroutineWorker(appContext, workerParams) {
+  CoroutineWorker(appContext, workerParams) {
 
   private val syncManager = SyncManager(applicationContext)
 
@@ -32,26 +32,18 @@ class WeightWorker(appContext: Context, workerParams: WorkerParameters) :
       val constraints = Constraints.Builder().build()
 
       val periodicWorkRequest =
-          PeriodicWorkRequestBuilder<WeightWorker>(30, TimeUnit.MINUTES, 15, TimeUnit.MINUTES)
-              .setConstraints(constraints)
-              .build()
+        PeriodicWorkRequestBuilder<WeightWorker>(30, TimeUnit.MINUTES, 15, TimeUnit.MINUTES)
+          .setConstraints(constraints)
+          .build()
 
       WorkManager.getInstance(context)
-          .enqueueUniquePeriodicWork(
-              WORK_NAME,
-              ExistingPeriodicWorkPolicy.KEEP,
-              periodicWorkRequest,
-          )
+        .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, periodicWorkRequest)
     }
 
     fun enqueueOneTimeWork(context: Context) {
       val request = OneTimeWorkRequestBuilder<WeightWorker>().build()
       WorkManager.getInstance(context)
-          .enqueueUniqueWork(
-              "WeightOneTimeSync",
-              ExistingWorkPolicy.KEEP,
-              request,
-          )
+        .enqueueUniqueWork("WeightOneTimeSync", ExistingWorkPolicy.KEEP, request)
     }
   }
 }

@@ -29,26 +29,26 @@ class WeightWorkerTest {
     val t2 = Instant.parse("2024-01-01T12:00:00Z")
     val t3 = Instant.parse("2024-01-01T11:00:00Z")
     val r1 =
-        WeightRecord(
-            time = t1,
-            zoneOffset = ZoneOffset.UTC,
-            weight = Mass.kilograms(70.0),
-            metadata = Metadata.manualEntry(),
-        )
+      WeightRecord(
+        time = t1,
+        zoneOffset = ZoneOffset.UTC,
+        weight = Mass.kilograms(70.0),
+        metadata = Metadata.manualEntry(),
+      )
     val r2 =
-        WeightRecord(
-            time = t2,
-            zoneOffset = ZoneOffset.UTC,
-            weight = Mass.kilograms(71.0),
-            metadata = Metadata.manualEntry(),
-        )
+      WeightRecord(
+        time = t2,
+        zoneOffset = ZoneOffset.UTC,
+        weight = Mass.kilograms(71.0),
+        metadata = Metadata.manualEntry(),
+      )
     val r3 =
-        WeightRecord(
-            time = t3,
-            zoneOffset = ZoneOffset.UTC,
-            weight = Mass.kilograms(72.0),
-            metadata = Metadata.manualEntry(),
-        )
+      WeightRecord(
+        time = t3,
+        zoneOffset = ZoneOffset.UTC,
+        weight = Mass.kilograms(72.0),
+        metadata = Metadata.manualEntry(),
+      )
 
     fakeClient.insertRecords(listOf(r1, r2, r3))
 
@@ -66,12 +66,12 @@ class WeightWorkerTest {
 
     val token = fakeClient.getChangesToken(ChangesTokenRequest(setOf(WeightRecord::class)))
     val r =
-        WeightRecord(
-            time = older,
-            zoneOffset = ZoneOffset.UTC,
-            weight = Mass.kilograms(70.0),
-            metadata = Metadata.manualEntry(),
-        )
+      WeightRecord(
+        time = older,
+        zoneOffset = ZoneOffset.UTC,
+        weight = Mass.kilograms(70.0),
+        metadata = Metadata.manualEntry(),
+      )
     fakeClient.insertRecords(listOf(r))
 
     val response = fakeClient.getChanges(token)

@@ -23,8 +23,7 @@ val Long.minutes: Duration
 operator fun Instant.minus(other: Instant): Duration = Duration.between(other, this)
 
 /**
- * Converts an [Instant] to a [Timestamp]
- * (https://github.com/protocolbuffers/protobuf/issues/6641).
+ * Converts an [Instant] to a [Timestamp] (https://github.com/protocolbuffers/protobuf/issues/6641).
  */
 fun Instant.toTimestamp(): Timestamp = timestamp {
   seconds = epochSecond
@@ -32,9 +31,8 @@ fun Instant.toTimestamp(): Timestamp = timestamp {
 }
 
 /**
- * Converts a [Timestamp] to an [Instant]
- * (https://github.com/protocolbuffers/protobuf/issues/6641). Throws [IllegalArgumentException] if
- * out of range.
+ * Converts a [Timestamp] to an [Instant] (https://github.com/protocolbuffers/protobuf/issues/6641).
+ * Throws [IllegalArgumentException] if out of range.
  */
 fun Timestamp.toInstant(): Instant {
   checkValid()

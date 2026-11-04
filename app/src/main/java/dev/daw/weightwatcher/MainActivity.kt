@@ -52,11 +52,11 @@ class MainActivity : ComponentActivity() {
   fun WeightWatcherApp() {
     val sdkStatus = remember { HealthConnectClient.getSdkStatus(this@MainActivity) }
     val healthConnectClient =
-        remember(sdkStatus) {
-          if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
-            HealthConnectClient.getOrCreate(this@MainActivity)
-          } else null
-        }
+      remember(sdkStatus) {
+        if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
+          HealthConnectClient.getOrCreate(this@MainActivity)
+        } else null
+      }
     Log.i("MainActivity", "Health Connect SDK Status: $sdkStatus")
     var hasPermissions by remember { mutableStateOf(false) }
     val syncManager = remember { SyncManager(this) }
@@ -64,18 +64,18 @@ class MainActivity : ComponentActivity() {
     val coroutineScope = rememberCoroutineScope()
 
     val requestPermissionActivityContract =
-        PermissionController.createRequestPermissionResultContract()
+      PermissionController.createRequestPermissionResultContract()
     val requestPermissions =
-        rememberLauncherForActivityResult(requestPermissionActivityContract) { granted ->
-          Log.i("MainActivity", "Permissions request result: $granted")
-          hasPermissions = granted.containsAll(SyncManager.REQUIRED_PERMISSIONS)
-          if (hasPermissions) {
-            Log.i("MainActivity", "All permissions granted! Enqueuing sync...")
-            // Immediate visual update to fix widget click behavior
-            coroutineScope.launch { WeightGlanceWidget.resetAll(this@MainActivity) }
-            WeightWorker.enqueueOneTimeWork(this@MainActivity)
-          }
+      rememberLauncherForActivityResult(requestPermissionActivityContract) { granted ->
+        Log.i("MainActivity", "Permissions request result: $granted")
+        hasPermissions = granted.containsAll(SyncManager.REQUIRED_PERMISSIONS)
+        if (hasPermissions) {
+          Log.i("MainActivity", "All permissions granted! Enqueuing sync...")
+          // Immediate visual update to fix widget click behavior
+          coroutineScope.launch { WeightGlanceWidget.resetAll(this@MainActivity) }
+          WeightWorker.enqueueOneTimeWork(this@MainActivity)
         }
+      }
 
     LaunchedEffect(Unit) {
       if (healthConnectClient != null) {
@@ -94,22 +94,22 @@ class MainActivity : ComponentActivity() {
     WeightWatcherTheme {
       Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
-            modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+          modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.Center,
         ) {
           Text("WeightWatcher Widget Setup", style = MaterialTheme.typography.headlineMedium)
           Spacer(modifier = Modifier.height(32.dp))
 
           if (sdkStatus != HealthConnectClient.SDK_AVAILABLE) {
             val errorMessage =
-                when (sdkStatus) {
-                  HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
-                      "Health Connect is not installed. Please install it from the Play Store."
-                  HealthConnectClient.SDK_UNAVAILABLE ->
-                      "Health Connect is not supported on this device."
-                  else -> "Health Connect status: $sdkStatus"
-                }
+              when (sdkStatus) {
+                HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
+                  "Health Connect is not installed. Please install it from the Play Store."
+                HealthConnectClient.SDK_UNAVAILABLE ->
+                  "Health Connect is not supported on this device."
+                else -> "Health Connect status: $sdkStatus"
+              }
             Text(errorMessage, color = MaterialTheme.colorScheme.error)
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = { /* Open Play Store? */ }) { Text("Check Health Connect") }
@@ -119,12 +119,12 @@ class MainActivity : ComponentActivity() {
 
             lastWeightTime?.let { time ->
               val formatter =
-                  DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
-                      .withZone(ZoneId.systemDefault())
+                DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+                  .withZone(ZoneId.systemDefault())
               Text(
-                  "Last weight log found: ${formatter.format(time)}",
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.secondary,
+                "Last weight log found: ${formatter.format(time)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.secondary,
               )
               Spacer(modifier = Modifier.height(16.dp))
             }
@@ -135,17 +135,17 @@ class MainActivity : ComponentActivity() {
             val appWidgetManager = AppWidgetManager.getInstance(this@MainActivity)
             if (appWidgetManager.isRequestPinAppWidgetSupported) {
               Button(
-                  onClick = {
-                    coroutineScope.launch {
-                      val manager = GlanceAppWidgetManager(this@MainActivity)
-                      manager.requestPinGlanceAppWidget(
-                          receiver = WeightGlanceWidgetReceiver::class.java,
-                          preview = WeightGlanceWidget(),
-                          previewState = WeightGlanceWidget.createMetadata(lastWeightTime),
-                      )
-                    }
-                  },
-                  modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                onClick = {
+                  coroutineScope.launch {
+                    val manager = GlanceAppWidgetManager(this@MainActivity)
+                    manager.requestPinGlanceAppWidget(
+                      receiver = WeightGlanceWidgetReceiver::class.java,
+                      preview = WeightGlanceWidget(),
+                      previewState = WeightGlanceWidget.createMetadata(lastWeightTime),
+                    )
+                  }
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
               ) {
                 Text("Pin Widget to Home Screen")
               }
@@ -154,13 +154,13 @@ class MainActivity : ComponentActivity() {
             Text("Need Health Connect read permissions for weight.")
             Spacer(modifier = Modifier.height(16.dp))
             Button(
-                onClick = {
-                  Log.i(
-                      "MainActivity",
-                      "Grant Permissions button clicked. Requesting: ${SyncManager.REQUIRED_PERMISSIONS}",
-                  )
-                  requestPermissions.launch(SyncManager.REQUIRED_PERMISSIONS)
-                }
+              onClick = {
+                Log.i(
+                  "MainActivity",
+                  "Grant Permissions button clicked. Requesting: ${SyncManager.REQUIRED_PERMISSIONS}",
+                )
+                requestPermissions.launch(SyncManager.REQUIRED_PERMISSIONS)
+              }
             ) {
               Text("Grant Permissions")
             }
@@ -180,11 +180,11 @@ class PermissionsRationaleActivity : ComponentActivity() {
       WeightWatcherTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
           Box(
-              modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),
-              contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),
+            contentAlignment = Alignment.Center,
           ) {
             Text(
-                "This app needs permission to read weight from Health Connect to display staleness on the widget."
+              "This app needs permission to read weight from Health Connect to display staleness on the widget."
             )
           }
         }

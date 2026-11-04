@@ -40,12 +40,12 @@ class TimestampsTest {
     val instant = Instant.ofEpochSecond(1_700_000_000L, 123_456_789L)
     val result: Timestamp = instant.toTimestamp()
     assertThat(result)
-        .isEqualTo(
-            timestamp {
-              seconds = 1_700_000_000L
-              nanos = 123_456_789
-            }
-        )
+      .isEqualTo(
+        timestamp {
+          seconds = 1_700_000_000L
+          nanos = 123_456_789
+        }
+      )
   }
 
   @Test

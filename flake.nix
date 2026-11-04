@@ -88,7 +88,7 @@
               ktfmt = {
                 enable = true;
                 name = "ktfmt";
-                entry = "${pkgs.ktfmt}/bin/ktfmt";
+                entry = "${pkgs.ktfmt}/bin/ktfmt --google-style";
                 files = "\\.kts?$";
               };
               xmlformat = {
