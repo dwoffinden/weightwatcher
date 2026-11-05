@@ -13,7 +13,6 @@ import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import java.time.Instant
-import java.time.InstantSource
 import kotlin.comparisons.naturalOrder
 import kotlin.comparisons.nullsFirst
 import kotlinx.coroutines.flow.Flow
@@ -32,7 +31,6 @@ class SyncManager(
   healthConnectClientProvider: () -> HealthConnectClient,
   private val updateWidgets:
     suspend (lastWeightTime: Instant?, hasPermissions: Boolean, isSyncing: Boolean) -> Unit,
-  private val clock: InstantSource = InstantSource.system(),
 ) {
   companion object {
     val REQUIRED_PERMISSIONS =
@@ -56,8 +54,7 @@ class SyncManager(
     dataStore.data.map { settings -> settings.lastWeightTimeOrNull?.toInstant() }
 
   constructor(
-    context: Context,
-    clock: InstantSource = InstantSource.system(),
+    context: Context
   ) : this(
     dataStore = context.applicationContext.dataStore,
     healthConnectClientProvider = { HealthConnectClient.getOrCreate(context.applicationContext) },
@@ -69,7 +66,6 @@ class SyncManager(
         isSyncing,
       )
     },
-    clock = clock,
   )
 
   suspend fun performSync(): Result<Unit> {
@@ -133,7 +129,7 @@ class SyncManager(
         healthConnectClient.readRecords(
           ReadRecordsRequest(
             WeightRecord::class,
-            timeRangeFilter = TimeRangeFilter.between(Instant.EPOCH, clock.instant()),
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
             ascendingOrder = false,
             pageSize = 1,
           )

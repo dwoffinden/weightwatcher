@@ -13,7 +13,6 @@ import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.extensions.proto.LiteProtoTruth.assertThat
 import java.io.File
 import java.time.Instant
-import java.time.InstantSource
 import java.time.ZoneOffset
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.CoroutineScope
@@ -38,8 +37,6 @@ class SyncManagerTest {
 
   @get:Rule val tempFolder = TemporaryFolder()
 
-  private val fixedNow = Instant.parse("2026-01-02T12:00:00Z")
-  private val clock: InstantSource = InstantSource.fixed(fixedNow)
   private val permissionController = FakePermissionController(grantAll = true)
   private val fakeClient = FakeHealthConnectClient(permissionController = permissionController)
   private val widgetUpdates = mutableListOf<WidgetUpdate>()
@@ -204,7 +201,6 @@ class SyncManagerTest {
       updateWidgets = { lastWeightTime, hasPermissions, isSyncing ->
         widgetUpdates.add(WidgetUpdate(lastWeightTime, hasPermissions, isSyncing))
       },
-      clock = clock,
     )
 
   private fun weightRecordAt(time: Instant): WeightRecord =
