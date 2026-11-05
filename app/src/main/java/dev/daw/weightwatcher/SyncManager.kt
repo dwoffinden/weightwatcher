@@ -1,9 +1,7 @@
 package dev.daw.weightwatcher
 
-import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
-import androidx.datastore.dataStore
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.changes.Change
 import androidx.health.connect.client.changes.UpsertionChange
@@ -13,24 +11,26 @@ import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import java.time.Instant
+import javax.inject.Inject
+import javax.inject.Provider
+import javax.inject.Singleton
 import kotlin.comparisons.naturalOrder
 import kotlin.comparisons.nullsFirst
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-// TODO: Remove this context extension and inject an explicit singleton via Dagger/Hilt instead.
-private val Context.dataStore: DataStore<SyncSettings> by
-  dataStore(
-    fileName = "sync_settings.pb",
-    serializer = ProtoSerializer(SyncSettings.getDefaultInstance(), SyncSettings.parser()),
-  )
+fun interface WidgetUpdater {
+  suspend fun updateWidgets(lastWeightTime: Instant?, hasPermissions: Boolean, isSyncing: Boolean)
+}
 
-class SyncManager(
+@Singleton
+class SyncManager
+@Inject
+constructor(
   private val dataStore: DataStore<SyncSettings>,
-  healthConnectClientProvider: () -> HealthConnectClient,
-  private val updateWidgets:
-    suspend (lastWeightTime: Instant?, hasPermissions: Boolean, isSyncing: Boolean) -> Unit,
+  private val healthConnectClientProvider: Provider<HealthConnectClient>,
+  private val widgetUpdater: WidgetUpdater,
 ) {
   companion object {
     val REQUIRED_PERMISSIONS =
@@ -48,32 +48,17 @@ class SyncManager(
         .maxOfOrNull { it.time }
   }
 
-  private val healthConnectClient: HealthConnectClient by lazy(healthConnectClientProvider)
+  private val healthConnectClient: HealthConnectClient by lazy { healthConnectClientProvider.get() }
 
   val lastWeightTime: Flow<Instant?> =
     dataStore.data.map { settings -> settings.lastWeightTimeOrNull?.toInstant() }
-
-  constructor(
-    context: Context
-  ) : this(
-    dataStore = context.applicationContext.dataStore,
-    healthConnectClientProvider = { HealthConnectClient.getOrCreate(context.applicationContext) },
-    updateWidgets = { lastWeightTime, hasPermissions, isSyncing ->
-      WeightGlanceWidget.updateAllEntries(
-        context.applicationContext,
-        lastWeightTime,
-        hasPermissions,
-        isSyncing,
-      )
-    },
-  )
 
   suspend fun performSync(): Result<Unit> {
     val granted = healthConnectClient.permissionController.getGrantedPermissions()
 
     if (!granted.containsAll(REQUIRED_PERMISSIONS)) {
       Log.i("SyncManager", "Permissions not granted, updating widget to Auth state")
-      updateWidgets(null, false, false)
+      widgetUpdater.updateWidgets(null, false, false)
       return Result.success(Unit)
     }
 
@@ -81,7 +66,7 @@ class SyncManager(
     val previousWeightTime: Instant? = settings.lastWeightTimeOrNull?.toInstant()
 
     Log.i("SyncManager", "Starting Health Connect sync")
-    updateWidgets(previousWeightTime, true, true)
+    widgetUpdater.updateWidgets(previousWeightTime, true, true)
 
     val nextSettings: SyncSettings? =
       try {
@@ -91,23 +76,23 @@ class SyncManager(
           "SyncManager",
           "SecurityException: Missing permissions for background read? ${e.message}",
         )
-        updateWidgets(null, false, false)
+        widgetUpdater.updateWidgets(null, false, false)
         return Result.failure(e)
       } catch (e: Exception) {
         Log.e("SyncManager", "Error updating weight: ${e.message}", e)
-        updateWidgets(previousWeightTime, true, false)
+        widgetUpdater.updateWidgets(previousWeightTime, true, false)
         return Result.failure(e)
       }
 
     if (nextSettings == null) {
       Log.i("SyncManager", "Changes token expired, clearing and retrying")
       dataStore.updateData { it.copy { clearChangesToken() } }
-      updateWidgets(previousWeightTime, true, false)
+      widgetUpdater.updateWidgets(previousWeightTime, true, false)
       return Result.failure(IllegalStateException("Changes token expired"))
     }
 
     dataStore.updateData { nextSettings }
-    updateWidgets(nextSettings.lastWeightTimeOrNull?.toInstant(), true, false)
+    widgetUpdater.updateWidgets(nextSettings.lastWeightTimeOrNull?.toInstant(), true, false)
     return Result.success(Unit)
   }
 

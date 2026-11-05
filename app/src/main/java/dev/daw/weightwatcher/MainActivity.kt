@@ -33,13 +33,26 @@ import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
+import dagger.hilt.android.AndroidEntryPoint
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import javax.inject.Inject
+import javax.inject.Provider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+  @set:Inject
+  @setparam:HealthConnectSdkStatus
+  var sdkStatus: Int = HealthConnectClient.SDK_UNAVAILABLE
+  @Inject lateinit var healthConnectClientProvider: Provider<HealthConnectClient>
+  @Inject lateinit var syncManager: SyncManager
+  @Inject lateinit var glanceAppWidget: WeightGlanceWidget
 
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
@@ -50,16 +63,8 @@ class MainActivity : ComponentActivity() {
 
   @Composable
   fun WeightWatcherApp() {
-    val sdkStatus = remember { HealthConnectClient.getSdkStatus(this@MainActivity) }
-    val healthConnectClient =
-      remember(sdkStatus) {
-        if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
-          HealthConnectClient.getOrCreate(this@MainActivity)
-        } else null
-      }
     Log.i("MainActivity", "Health Connect SDK Status: $sdkStatus")
     var hasPermissions by remember { mutableStateOf(false) }
-    val syncManager = remember { SyncManager(applicationContext) }
     val lastWeightTime: Instant? by syncManager.lastWeightTime.collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
 
@@ -72,14 +77,17 @@ class MainActivity : ComponentActivity() {
         if (hasPermissions) {
           Log.i("MainActivity", "All permissions granted! Enqueuing sync...")
           // Immediate visual update to fix widget click behavior
-          coroutineScope.launch { WeightGlanceWidget.resetAll(this@MainActivity) }
+          coroutineScope.launch { glanceAppWidget.resetAll(this@MainActivity) }
           WeightWorker.enqueueOneTimeWork(this@MainActivity)
         }
       }
 
     LaunchedEffect(Unit) {
-      if (healthConnectClient != null) {
-        val granted = healthConnectClient.permissionController.getGrantedPermissions()
+      if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
+        val granted =
+          withContext(Dispatchers.IO) {
+            healthConnectClientProvider.get().permissionController.getGrantedPermissions()
+          }
         hasPermissions = granted.containsAll(SyncManager.REQUIRED_PERMISSIONS)
         Log.i("MainActivity", "Initial permissions check: $hasPermissions")
         if (hasPermissions) {
@@ -138,7 +146,7 @@ class MainActivity : ComponentActivity() {
                     val manager = GlanceAppWidgetManager(this@MainActivity)
                     manager.requestPinGlanceAppWidget(
                       receiver = WeightGlanceWidgetReceiver::class.java,
-                      preview = WeightGlanceWidget(),
+                      preview = glanceAppWidget,
                       previewState = WeightGlanceWidget.createMetadata(lastWeightTime),
                     )
                   }

@@ -198,7 +198,7 @@ class SyncManagerTest {
     SyncManager(
       dataStore = dataStore,
       healthConnectClientProvider = { fakeClient },
-      updateWidgets = { lastWeightTime, hasPermissions, isSyncing ->
+      widgetUpdater = { lastWeightTime, hasPermissions, isSyncing ->
         widgetUpdates.add(WidgetUpdate(lastWeightTime, hasPermissions, isSyncing))
       },
     )

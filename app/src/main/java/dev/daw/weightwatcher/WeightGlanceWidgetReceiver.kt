@@ -1,8 +1,10 @@
 package dev.daw.weightwatcher
 
-import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class WeightGlanceWidgetReceiver : GlanceAppWidgetReceiver() {
-  override val glanceAppWidget: GlanceAppWidget = WeightGlanceWidget()
+  @Inject override lateinit var glanceAppWidget: WeightGlanceWidget
 }

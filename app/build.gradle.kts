@@ -1,6 +1,8 @@
 plugins {
   id("com.android.application")
   id("org.jetbrains.kotlin.plugin.compose")
+  id("com.google.devtools.ksp")
+  id("com.google.dagger.hilt.android")
   id("com.google.protobuf")
 }
 
@@ -66,9 +68,17 @@ dependencies {
   // Coroutines
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
+  // Hilt
+  implementation("com.google.dagger:hilt-android:2.60.1")
+  ksp("com.google.dagger:hilt-android-compiler:2.60.1")
+  implementation("androidx.hilt:hilt-work:1.4.0")
+  ksp("androidx.hilt:hilt-compiler:1.4.0")
+
   // Testing
   testImplementation("junit:junit:4.13.2")
   testImplementation(kotlin("test"))
+  testImplementation("com.google.dagger:hilt-android-testing:2.60.1")
+  kspTest("com.google.dagger:hilt-android-compiler:2.60.1")
   testImplementation("com.google.testparameterinjector:test-parameter-injector:1.22")
   testImplementation("androidx.health.connect:connect-testing:1.0.0-alpha04")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")

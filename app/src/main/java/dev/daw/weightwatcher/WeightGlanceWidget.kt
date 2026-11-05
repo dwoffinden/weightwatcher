@@ -44,9 +44,9 @@ import java.io.File
 import java.time.Duration
 import java.time.Instant
 import java.time.InstantSource
+import javax.inject.Inject
 
-class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system()) :
-  GlanceAppWidget() {
+class WeightGlanceWidget @Inject constructor(private val clock: InstantSource) : GlanceAppWidget() {
 
   companion object {
     private val STALE_THRESHOLD: Duration = 20.hours
@@ -54,47 +54,6 @@ class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system
 
     internal fun formatStaleness(staleness: Duration): String =
       if (staleness < DAYS_THRESHOLD) "${staleness.toHours()}h" else "${staleness.toDays()}d"
-
-    /** Updates the state for all instances of this widget. */
-    suspend fun updateAllEntries(
-      context: Context,
-      lastWeightTime: Instant?,
-      hasPermissions: Boolean,
-      isSyncing: Boolean,
-    ) {
-      val manager = GlanceAppWidgetManager(context)
-      val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
-      glanceIds.forEach { glanceId ->
-        updateAppWidgetState(context, WidgetStateDefinition, glanceId) { state: WidgetState ->
-          state.copy {
-            if (lastWeightTime != null) {
-              this.lastWeightTime = lastWeightTime.toTimestamp()
-            } else {
-              clearLastWeightTime()
-            }
-            status =
-              when {
-                isSyncing -> WidgetState.Status.SYNCING
-                !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
-                else -> WidgetState.Status.OK
-              }
-          }
-        }
-      }
-      WeightGlanceWidget().updateAll(context)
-    }
-
-    /** Resets the state for all instances of this widget. */
-    suspend fun resetAll(context: Context) {
-      val manager = GlanceAppWidgetManager(context)
-      val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
-      glanceIds.forEach { glanceId ->
-        updateAppWidgetState(context, WidgetStateDefinition, glanceId) {
-          WidgetState.getDefaultInstance()
-        }
-      }
-      WeightGlanceWidget().updateAll(context)
-    }
 
     /**
      * Returns a [WidgetState] object suitable for
@@ -118,6 +77,47 @@ class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system
   }
 
   override val stateDefinition: GlanceStateDefinition<WidgetState> = WidgetStateDefinition
+
+  /** Updates the state for all instances of this widget. */
+  suspend fun updateAllEntries(
+    context: Context,
+    lastWeightTime: Instant?,
+    hasPermissions: Boolean,
+    isSyncing: Boolean,
+  ) {
+    val manager = GlanceAppWidgetManager(context)
+    val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
+    glanceIds.forEach { glanceId ->
+      updateAppWidgetState(context, WidgetStateDefinition, glanceId) { state: WidgetState ->
+        state.copy {
+          if (lastWeightTime != null) {
+            this.lastWeightTime = lastWeightTime.toTimestamp()
+          } else {
+            clearLastWeightTime()
+          }
+          status =
+            when {
+              isSyncing -> WidgetState.Status.SYNCING
+              !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
+              else -> WidgetState.Status.OK
+            }
+        }
+      }
+    }
+    updateAll(context)
+  }
+
+  /** Resets the state for all instances of this widget. */
+  suspend fun resetAll(context: Context) {
+    val manager = GlanceAppWidgetManager(context)
+    val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
+    glanceIds.forEach { glanceId ->
+      updateAppWidgetState(context, WidgetStateDefinition, glanceId) {
+        WidgetState.getDefaultInstance()
+      }
+    }
+    updateAll(context)
+  }
 
   override suspend fun provideGlance(context: Context, id: GlanceId) {
     provideContent {
