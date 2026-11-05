@@ -108,23 +108,16 @@
           };
           jdk = pkgs.jdk25_headless;
           # gradle.properties is generated into the Nix store and symlinked at
-          # shell entry so Gradle sees the correct SDK and JDK store paths.
-          gradleProperties = pkgs.writeText "gradle.properties" ''
-            android.aapt2FromMavenOverride=${androidSdk}/libexec/android-sdk/build-tools/${buildToolsVersion}/aapt2
-            org.gradle.java.home=${jdk}/lib/openjdk
-            org.gradle.jvmargs=-Xmx4096m -XX:+HeapDumpOnOutOfMemoryError
-            org.gradle.daemon=true
-            org.gradle.parallel=true
-            org.gradle.configureondemand=true
-          '';
-          ciGradleProperties = pkgs.writeText "gradle.properties" ''
-            android.aapt2FromMavenOverride=${ciAndroidSdk}/libexec/android-sdk/build-tools/${buildToolsVersion}/aapt2
-            org.gradle.java.home=${jdk}/lib/openjdk
-            org.gradle.jvmargs=-Xmx4096m -XX:+HeapDumpOnOutOfMemoryError
-            org.gradle.daemon=true
-            org.gradle.parallel=true
-            org.gradle.configureondemand=true
-          '';
+          # shell entry so Gradle sees the correct SDK store path.
+          mkGradleProperties =
+            sdk:
+            pkgs.writeText "gradle.properties" ''
+              android.aapt2FromMavenOverride=${sdk}/libexec/android-sdk/build-tools/${buildToolsVersion}/aapt2
+              org.gradle.jvmargs=-Xmx4096m -XX:+HeapDumpOnOutOfMemoryError
+              org.gradle.daemon=true
+              org.gradle.parallel=true
+              org.gradle.configureondemand=true
+            '';
         in
         {
           default = pkgs.mkShell {
@@ -143,7 +136,7 @@
               export ANDROID_HOME="${androidSdk}/libexec/android-sdk"
               export ANDROID_SDK_ROOT="${androidSdk}/libexec/android-sdk"
               export JAVA_HOME="${jdk}/lib/openjdk"
-              ln -sf ${gradleProperties} gradle.properties
+              ln -sf ${mkGradleProperties androidSdk} gradle.properties
             '';
           };
           # Minimal shell for CI: skips emulator, system images, and dev tooling.
@@ -157,7 +150,7 @@
               export ANDROID_HOME="${ciAndroidSdk}/libexec/android-sdk"
               export ANDROID_SDK_ROOT="${ciAndroidSdk}/libexec/android-sdk"
               export JAVA_HOME="${jdk}/lib/openjdk"
-              ln -sf ${ciGradleProperties} gradle.properties
+              ln -sf ${mkGradleProperties ciAndroidSdk} gradle.properties
             '';
           };
         }
