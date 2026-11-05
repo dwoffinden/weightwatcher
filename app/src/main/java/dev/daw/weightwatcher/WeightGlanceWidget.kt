@@ -50,6 +50,10 @@ class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system
 
   companion object {
     private val STALE_THRESHOLD: Duration = 20.hours
+    private val DAYS_THRESHOLD: Duration = 72.hours
+
+    internal fun formatStaleness(staleness: Duration): String =
+      if (staleness < DAYS_THRESHOLD) "${staleness.toHours()}h" else "${staleness.toDays()}d"
 
     /** Updates the state for all instances of this widget. */
     suspend fun updateAllEntries(
@@ -185,7 +189,7 @@ class WeightGlanceWidget(private val clock: InstantSource = InstantSource.system
           isSyncing -> "Sync..."
           !hasPermissions -> "Auth"
           staleness == null -> "None"
-          else -> "${staleness.toHours()}h"
+          else -> formatStaleness(staleness)
         }
 
       Image(
