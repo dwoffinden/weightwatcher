@@ -55,8 +55,8 @@ constructor(private val dataStore: DataStore<SyncSettings>, private val clock: I
     internal fun formatStaleness(staleness: Duration): String =
       if (staleness < DAYS_THRESHOLD) "${staleness.toHours()}h" else "${staleness.toDays()}d"
 
-    internal fun hasPermissions(status: Status): Boolean =
-      status == Status.OK || status == Status.SYNCING
+    internal fun isSyncing(status: Status): Boolean =
+      status == Status.SYNCING || status == Status.STATUS_UNSPECIFIED
   }
 
   override val stateDefinition: GlanceStateDefinition<*>? = null
@@ -72,8 +72,8 @@ constructor(private val dataStore: DataStore<SyncSettings>, private val clock: I
         WidgetContent(
           context,
           lastWeightTime,
-          hasPermissions = hasPermissions(status),
-          isSyncing = status == Status.SYNCING,
+          hasPermissions = status != Status.NO_PERMISSIONS,
+          isSyncing = isSyncing(status),
         )
       }
     }

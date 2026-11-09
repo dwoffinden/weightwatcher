@@ -29,8 +29,8 @@ class WeightGlanceWidgetTest {
   }
 
   @Test
-  fun hasPermissions_returnsTrueOnlyForOkAndSyncing(@TestParameter status: Status) {
-    assertThat(WeightGlanceWidget.hasPermissions(status))
-      .isEqualTo(status == Status.OK || status == Status.SYNCING)
+  fun isSyncing_returnsTrueOnlyForSyncingAndUnspecified(@TestParameter status: Status) {
+    assertThat(WeightGlanceWidget.isSyncing(status))
+      .isEqualTo(status == Status.SYNCING || status == Status.STATUS_UNSPECIFIED)
   }
 }
