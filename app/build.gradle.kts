@@ -81,7 +81,6 @@ dependencies {
   kspTest("com.google.dagger:hilt-android-compiler:2.60.1")
   testImplementation("com.google.testparameterinjector:test-parameter-injector:1.22")
   testImplementation("androidx.health.connect:connect-testing:1.0.0-alpha04")
-  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
   testImplementation("com.google.truth:truth:1.4.5")
   testImplementation("com.google.truth.extensions:truth-liteproto-extension:1.4.5")
   testImplementation("org.robolectric:robolectric:4.17")
