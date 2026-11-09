@@ -69,6 +69,7 @@ class MainActivityTest {
         .onNodeWithText("Need Health Connect read permissions for weight.")
         .assertIsDisplayed()
       composeTestRule.onNodeWithText("Grant Permissions").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Open Health Connect").assertIsDisplayed()
     }
   }
 
@@ -82,6 +83,7 @@ class MainActivityTest {
       composeTestRule
         .onNodeWithText("You can now add the widget to your home screen.")
         .assertIsDisplayed()
+      composeTestRule.onNodeWithText("Open Health Connect").assertIsDisplayed()
     }
   }
 }

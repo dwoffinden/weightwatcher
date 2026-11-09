@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -119,57 +120,71 @@ class MainActivity : ComponentActivity() {
                 else -> "Health Connect status: $sdkStatus"
               }
             Text(errorMessage, color = MaterialTheme.colorScheme.error)
-          } else if (hasPermissions) {
-            Text("Permissions granted! 😊")
-            Spacer(modifier = Modifier.height(16.dp))
-
-            val currentLastWeightTime: Instant? = lastWeightTime
-            if (currentLastWeightTime != null) {
-              val formatter = remember {
-                DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
-                  .withZone(ZoneId.systemDefault())
-              }
-              Text(
-                "Last weight log found: ${formatter.format(currentLastWeightTime)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.secondary,
-              )
+          } else {
+            if (hasPermissions) {
+              Text("Permissions granted! 😊")
               Spacer(modifier = Modifier.height(16.dp))
-            }
 
-            Text("You can now add the widget to your home screen.")
-            Spacer(modifier = Modifier.height(24.dp))
+              val currentLastWeightTime: Instant? = lastWeightTime
+              if (currentLastWeightTime != null) {
+                val formatter = remember {
+                  DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+                    .withZone(ZoneId.systemDefault())
+                }
+                Text(
+                  "Last weight log found: ${formatter.format(currentLastWeightTime)}",
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.secondary,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+              }
 
-            val appWidgetManager = AppWidgetManager.getInstance(this@MainActivity)
-            if (appWidgetManager.isRequestPinAppWidgetSupported) {
+              Text("You can now add the widget to your home screen.")
+              Spacer(modifier = Modifier.height(24.dp))
+
+              val appWidgetManager = AppWidgetManager.getInstance(this@MainActivity)
+              if (appWidgetManager.isRequestPinAppWidgetSupported) {
+                Button(
+                  onClick = {
+                    coroutineScope.launch {
+                      val manager = GlanceAppWidgetManager(this@MainActivity)
+                      manager.requestPinGlanceAppWidget(
+                        receiver = WeightGlanceWidgetReceiver::class.java,
+                        preview = glanceAppWidget,
+                      )
+                    }
+                  },
+                  modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                ) {
+                  Text("Pin Widget to Home Screen")
+                }
+              }
+            } else {
+              Text("Need Health Connect read permissions for weight.")
+              Spacer(modifier = Modifier.height(16.dp))
               Button(
                 onClick = {
-                  coroutineScope.launch {
-                    val manager = GlanceAppWidgetManager(this@MainActivity)
-                    manager.requestPinGlanceAppWidget(
-                      receiver = WeightGlanceWidgetReceiver::class.java,
-                      preview = glanceAppWidget,
-                    )
-                  }
-                },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                  Log.i(
+                    "MainActivity",
+                    "Grant Permissions button clicked. Requesting: ${SyncManager.REQUIRED_PERMISSIONS}",
+                  )
+                  requestPermissions.launch(SyncManager.REQUIRED_PERMISSIONS)
+                }
               ) {
-                Text("Pin Widget to Home Screen")
+                Text("Grant Permissions")
               }
             }
-          } else {
-            Text("Need Health Connect read permissions for weight.")
+
             Spacer(modifier = Modifier.height(16.dp))
-            Button(
+            OutlinedButton(
               onClick = {
-                Log.i(
-                  "MainActivity",
-                  "Grant Permissions button clicked. Requesting: ${SyncManager.REQUIRED_PERMISSIONS}",
+                startActivity(
+                  HealthConnectClient.getHealthConnectManageDataIntent(this@MainActivity)
                 )
-                requestPermissions.launch(SyncManager.REQUIRED_PERMISSIONS)
-              }
+              },
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
             ) {
-              Text("Grant Permissions")
+              Text("Open Health Connect")
             }
           }
         }
