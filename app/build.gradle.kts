@@ -16,8 +16,8 @@ android {
     applicationId = "dev.daw.weightwatcher"
     minSdk = 34
     targetSdk = 37
-    versionCode = 4
-    versionName = "4"
+    versionCode = 5
+    versionName = "5"
   }
 
   buildTypes {
