@@ -5,4 +5,7 @@
 /app/build
 /build
 /gradle.properties
+/gradle/wrapper/
+/gradlew
+/gradlew.bat
 /result
