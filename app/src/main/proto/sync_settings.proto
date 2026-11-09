@@ -1,10 +1,19 @@
 edition = "2024";
 
-import "google/protobuf/timestamp.proto";
-
+option features.field_presence = IMPLICIT;
 option java_package = "dev.daw.weightwatcher";
+
+import "google/protobuf/timestamp.proto";
 
 message SyncSettings {
   string changes_token = 1;
   .google.protobuf.Timestamp last_weight_time = 2;
+
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    OK = 1;
+    SYNCING = 2;
+    NO_PERMISSIONS = 3;
+  }
+  Status status = 3;
 }

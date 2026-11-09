@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.dataStoreFile
+import androidx.glance.appwidget.updateAll
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -30,7 +31,5 @@ object AppModule {
   fun provideWidgetUpdater(
     @ApplicationContext context: Context,
     widget: WeightGlanceWidget,
-  ): WidgetUpdater = WidgetUpdater { lastWeightTime, hasPermissions, isSyncing ->
-    widget.updateAllEntries(context, lastWeightTime, hasPermissions, isSyncing)
-  }
+  ): WidgetUpdater = WidgetUpdater { widget.updateAll(context) }
 }

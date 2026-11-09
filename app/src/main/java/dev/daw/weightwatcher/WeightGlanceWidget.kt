@@ -4,10 +4,10 @@ import android.content.Context
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
-import androidx.datastore.core.DataStoreFactory
-import androidx.datastore.dataStoreFile
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -18,17 +18,13 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.state.updateAppWidgetState
-import androidx.glance.appwidget.updateAll
 import androidx.glance.background
 import androidx.glance.color.ColorProvider
-import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Spacer
@@ -40,13 +36,17 @@ import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import java.io.File
+import dev.daw.weightwatcher.SyncSettings.Status
 import java.time.Duration
 import java.time.Instant
 import java.time.InstantSource
 import javax.inject.Inject
+import kotlinx.coroutines.flow.first
 
-class WeightGlanceWidget @Inject constructor(private val clock: InstantSource) : GlanceAppWidget() {
+class WeightGlanceWidget
+@Inject
+constructor(private val dataStore: DataStore<SyncSettings>, private val clock: InstantSource) :
+  GlanceAppWidget() {
 
   companion object {
     private val STALE_THRESHOLD: Duration = 20.hours
@@ -55,82 +55,25 @@ class WeightGlanceWidget @Inject constructor(private val clock: InstantSource) :
     internal fun formatStaleness(staleness: Duration): String =
       if (staleness < DAYS_THRESHOLD) "${staleness.toHours()}h" else "${staleness.toDays()}d"
 
-    /**
-     * Returns a [WidgetState] object suitable for
-     * [GlanceAppWidgetManager.requestPinGlanceAppWidget].
-     */
-    fun createMetadata(
-      lastWeightTime: Instant?,
-      hasPermissions: Boolean = true,
-      isSyncing: Boolean = false,
-    ): WidgetState = widgetState {
-      if (lastWeightTime != null) {
-        this.lastWeightTime = lastWeightTime.toTimestamp()
-      }
-      status =
-        when {
-          isSyncing -> WidgetState.Status.SYNCING
-          !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
-          else -> WidgetState.Status.OK
-        }
-    }
+    internal fun hasPermissions(status: Status): Boolean =
+      status == Status.OK || status == Status.SYNCING
   }
 
-  override val stateDefinition: GlanceStateDefinition<WidgetState> = WidgetStateDefinition
-
-  /** Updates the state for all instances of this widget. */
-  suspend fun updateAllEntries(
-    context: Context,
-    lastWeightTime: Instant?,
-    hasPermissions: Boolean,
-    isSyncing: Boolean,
-  ) {
-    val manager = GlanceAppWidgetManager(context)
-    val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
-    glanceIds.forEach { glanceId ->
-      updateAppWidgetState(context, WidgetStateDefinition, glanceId) { state: WidgetState ->
-        state.copy {
-          if (lastWeightTime != null) {
-            this.lastWeightTime = lastWeightTime.toTimestamp()
-          } else {
-            clearLastWeightTime()
-          }
-          status =
-            when {
-              isSyncing -> WidgetState.Status.SYNCING
-              !hasPermissions -> WidgetState.Status.NO_PERMISSIONS
-              else -> WidgetState.Status.OK
-            }
-        }
-      }
-    }
-    updateAll(context)
-  }
-
-  /** Resets the state for all instances of this widget. */
-  suspend fun resetAll(context: Context) {
-    val manager = GlanceAppWidgetManager(context)
-    val glanceIds = manager.getGlanceIds(WeightGlanceWidget::class.java)
-    glanceIds.forEach { glanceId ->
-      updateAppWidgetState(context, WidgetStateDefinition, glanceId) {
-        WidgetState.getDefaultInstance()
-      }
-    }
-    updateAll(context)
-  }
+  override val stateDefinition: GlanceStateDefinition<*>? = null
 
   override suspend fun provideGlance(context: Context, id: GlanceId) {
+    val initialState: SyncSettings = dataStore.data.first()
     provideContent {
-      val state = currentState<WidgetState>()
-      val lastWeightTime = state.lastWeightTimeOrNull?.toInstant()
-      val status = state.status
+      val state: SyncSettings by dataStore.data.collectAsState(initial = initialState)
+      val lastWeightTime: Instant? = state.lastWeightTimeOrNull?.toInstant()
+      val status: Status = state.status
 
       GlanceTheme {
         WidgetContent(
           context,
           lastWeightTime,
-          hasPermissions = status != WidgetState.Status.NO_PERMISSIONS,
-          isSyncing = status == WidgetState.Status.SYNCING,
+          hasPermissions = hasPermissions(status),
+          isSyncing = status == Status.SYNCING,
         )
       }
     }
@@ -205,17 +148,6 @@ class WeightGlanceWidget @Inject constructor(private val clock: InstantSource) :
       )
     }
   }
-}
-
-object WidgetStateDefinition : GlanceStateDefinition<WidgetState> {
-  override suspend fun getDataStore(context: Context, fileKey: String): DataStore<WidgetState> =
-    DataStoreFactory.create(
-      serializer = ProtoSerializer(WidgetState.getDefaultInstance(), WidgetState.parser()),
-      produceFile = { getLocation(context, fileKey) },
-    )
-
-  override fun getLocation(context: Context, fileKey: String): File =
-    context.dataStoreFile("widget_state_$fileKey.pb")
 }
 
 class RefreshCallback : ActionCallback {

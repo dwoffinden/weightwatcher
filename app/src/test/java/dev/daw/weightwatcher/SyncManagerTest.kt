@@ -11,6 +11,7 @@ import androidx.health.connect.client.testing.FakePermissionController
 import androidx.health.connect.client.units.Mass
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.extensions.proto.LiteProtoTruth.assertThat
+import dev.daw.weightwatcher.SyncSettings.Status
 import java.io.File
 import java.time.Instant
 import java.time.ZoneOffset
@@ -29,17 +30,11 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class SyncManagerTest {
 
-  private data class WidgetUpdate(
-    val lastWeightTime: Instant?,
-    val hasPermissions: Boolean,
-    val isSyncing: Boolean,
-  )
-
   @get:Rule val tempFolder = TemporaryFolder()
 
   private val permissionController = FakePermissionController(grantAll = true)
   private val fakeClient = FakeHealthConnectClient(permissionController = permissionController)
-  private val widgetUpdates = mutableListOf<WidgetUpdate>()
+  private val observedWidgetStates = mutableListOf<SyncSettings>()
 
   @Test
   fun getLatestWeightTimeFromChanges_emptyChanges_returnsNull() {
@@ -64,7 +59,7 @@ class SyncManagerTest {
   }
 
   @Test
-  fun performSync_missingPermissions_updatesWidgetToNoPermissions() = runTest {
+  fun performSync_missingPermissions_updatesStatusToNoPermissions() = runTest {
     permissionController.revokeAllPermissions()
     val dataStore = createDataStore(backgroundScope)
     val syncManager = createSyncManager(dataStore)
@@ -72,14 +67,12 @@ class SyncManagerTest {
     val result: Result<Unit> = syncManager.performSync()
 
     assertThat(result.isSuccess).isTrue()
-    assertThat(widgetUpdates)
-      .containsExactly(
-        WidgetUpdate(lastWeightTime = null, hasPermissions = false, isSyncing = false)
-      )
+    assertThat(observedWidgetStates)
+      .containsExactly(syncSettings { status = Status.NO_PERMISSIONS })
   }
 
   @Test
-  fun performSync_initialSyncWithRecord_persistsTokenAndWeightTime() = runTest {
+  fun performSync_initialSyncWithRecord_persistsTokenWeightTimeAndStatus() = runTest {
     val recordTime = Instant.parse("2026-01-01T20:00:00Z")
     fakeClient.insertRecords(listOf(weightRecordAt(recordTime)))
     val dataStore = createDataStore(backgroundScope)
@@ -90,12 +83,18 @@ class SyncManagerTest {
     assertThat(result.isSuccess).isTrue()
     val savedSettings: SyncSettings = dataStore.data.first()
     assertThat(savedSettings.changesToken).isNotEmpty()
-    assertThat(savedSettings.lastWeightTime).isEqualTo(recordTime.toTimestamp())
-    assertThat(syncManager.lastWeightTime.first()).isEqualTo(recordTime)
-    assertThat(widgetUpdates.last())
+    assertThat(savedSettings)
       .isEqualTo(
-        WidgetUpdate(lastWeightTime = recordTime, hasPermissions = true, isSyncing = false)
+        syncSettings {
+          changesToken = savedSettings.changesToken
+          lastWeightTime = recordTime.toTimestamp()
+          status = Status.OK
+        }
       )
+    assertThat(syncManager.lastWeightTime.first()).isEqualTo(recordTime)
+    assertThat(observedWidgetStates)
+      .containsExactly(syncSettings { status = Status.SYNCING }, savedSettings)
+      .inOrder()
   }
 
   @Test
@@ -111,10 +110,15 @@ class SyncManagerTest {
     val result: Result<Unit> = syncManager.performSync()
 
     assertThat(result.isSuccess).isTrue()
-    assertThat(syncManager.lastWeightTime.first()).isEqualTo(initialTime)
-    assertThat(widgetUpdates.last())
+    val savedSettings: SyncSettings = dataStore.data.first()
+    assertThat(savedSettings.changesToken).isNotEmpty()
+    assertThat(savedSettings)
       .isEqualTo(
-        WidgetUpdate(lastWeightTime = initialTime, hasPermissions = true, isSyncing = false)
+        syncSettings {
+          changesToken = savedSettings.changesToken
+          lastWeightTime = initialTime.toTimestamp()
+          status = Status.OK
+        }
       )
   }
 
@@ -138,14 +142,15 @@ class SyncManagerTest {
     val result: Result<Unit> = syncManager.performSync()
 
     assertThat(result.isSuccess).isTrue()
-    assertThat(syncManager.lastWeightTime.first()).isEqualTo(secondPageNewestTime)
-    assertThat(widgetUpdates.last())
+    val savedSettings: SyncSettings = dataStore.data.first()
+    assertThat(savedSettings.changesToken).isNotEmpty()
+    assertThat(savedSettings)
       .isEqualTo(
-        WidgetUpdate(
-          lastWeightTime = secondPageNewestTime,
-          hasPermissions = true,
-          isSyncing = false,
-        )
+        syncSettings {
+          changesToken = savedSettings.changesToken
+          lastWeightTime = secondPageNewestTime.toTimestamp()
+          status = Status.OK
+        }
       )
   }
 
@@ -162,13 +167,26 @@ class SyncManagerTest {
     val result: Result<Unit> = syncManager.performSync()
 
     assertThat(result.isFailure).isTrue()
-    val settingsAfterExpiry: SyncSettings = dataStore.data.first()
-    assertThat(settingsAfterExpiry.hasChangesToken()).isFalse()
-    assertThat(settingsAfterExpiry.lastWeightTime).isEqualTo(initialTime.toTimestamp())
-    assertThat(widgetUpdates.last())
+    assertThat(observedWidgetStates.last())
       .isEqualTo(
-        WidgetUpdate(lastWeightTime = initialTime, hasPermissions = true, isSyncing = false)
+        syncSettings {
+          lastWeightTime = initialTime.toTimestamp()
+          status = Status.OK
+        }
       )
+  }
+
+  @Test
+  fun resetStatus_setsStatusToOkAndUpdatesWidgets() = runTest {
+    permissionController.revokeAllPermissions()
+    val dataStore = createDataStore(backgroundScope)
+    val syncManager = createSyncManager(dataStore)
+    syncManager.performSync()
+    observedWidgetStates.clear()
+
+    syncManager.resetStatus()
+
+    assertThat(observedWidgetStates).containsExactly(syncSettings { status = Status.OK })
   }
 
   @Test
@@ -198,9 +216,7 @@ class SyncManagerTest {
     SyncManager(
       dataStore = dataStore,
       healthConnectClientProvider = { fakeClient },
-      widgetUpdater = { lastWeightTime, hasPermissions, isSyncing ->
-        widgetUpdates.add(WidgetUpdate(lastWeightTime, hasPermissions, isSyncing))
-      },
+      widgetUpdater = { observedWidgetStates += dataStore.data.first() },
     )
 
   private fun weightRecordAt(time: Instant): WeightRecord =

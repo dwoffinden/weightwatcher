@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
         if (hasPermissions) {
           Log.i("MainActivity", "All permissions granted! Enqueuing sync...")
           // Immediate visual update to fix widget click behavior
-          coroutineScope.launch { glanceAppWidget.resetAll(this@MainActivity) }
+          coroutineScope.launch { syncManager.resetStatus() }
           WeightWorker.enqueueOneTimeWork(this@MainActivity)
         }
       }
@@ -91,8 +91,10 @@ class MainActivity : ComponentActivity() {
         hasPermissions = granted.containsAll(SyncManager.REQUIRED_PERMISSIONS)
         Log.i("MainActivity", "Initial permissions check: $hasPermissions")
         if (hasPermissions) {
+          syncManager.resetStatus()
           // Enqueue worker
           WeightWorker.enqueuePeriodicWork(this@MainActivity)
+          WeightWorker.enqueueOneTimeWork(this@MainActivity)
         }
       }
     }
@@ -147,7 +149,6 @@ class MainActivity : ComponentActivity() {
                     manager.requestPinGlanceAppWidget(
                       receiver = WeightGlanceWidgetReceiver::class.java,
                       preview = glanceAppWidget,
-                      previewState = WeightGlanceWidget.createMetadata(lastWeightTime),
                     )
                   }
                 },

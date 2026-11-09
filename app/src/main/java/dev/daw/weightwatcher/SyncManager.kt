@@ -10,6 +10,7 @@ import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import dev.daw.weightwatcher.SyncSettings.Status
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Provider
@@ -17,11 +18,10 @@ import javax.inject.Singleton
 import kotlin.comparisons.naturalOrder
 import kotlin.comparisons.nullsFirst
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 fun interface WidgetUpdater {
-  suspend fun updateWidgets(lastWeightTime: Instant?, hasPermissions: Boolean, isSyncing: Boolean)
+  suspend fun updateWidgets()
 }
 
 @Singleton
@@ -53,20 +53,29 @@ constructor(
   val lastWeightTime: Flow<Instant?> =
     dataStore.data.map { settings -> settings.lastWeightTimeOrNull?.toInstant() }
 
+  suspend fun resetStatus() {
+    dataStore.updateData { it.copy { status = Status.OK } }
+    widgetUpdater.updateWidgets()
+  }
+
   suspend fun performSync(): Result<Unit> {
     val granted = healthConnectClient.permissionController.getGrantedPermissions()
 
     if (!granted.containsAll(REQUIRED_PERMISSIONS)) {
       Log.i("SyncManager", "Permissions not granted, updating widget to Auth state")
-      widgetUpdater.updateWidgets(null, false, false)
+      dataStore.updateData {
+        it.copy {
+          clearLastWeightTime()
+          status = Status.NO_PERMISSIONS
+        }
+      }
+      widgetUpdater.updateWidgets()
       return Result.success(Unit)
     }
 
-    val settings: SyncSettings = dataStore.data.first()
-    val previousWeightTime: Instant? = settings.lastWeightTimeOrNull?.toInstant()
-
     Log.i("SyncManager", "Starting Health Connect sync")
-    widgetUpdater.updateWidgets(previousWeightTime, true, true)
+    val settings: SyncSettings = dataStore.updateData { it.copy { status = Status.SYNCING } }
+    widgetUpdater.updateWidgets()
 
     val nextSettings: SyncSettings? =
       try {
@@ -76,23 +85,35 @@ constructor(
           "SyncManager",
           "SecurityException: Missing permissions for background read? ${e.message}",
         )
-        widgetUpdater.updateWidgets(null, false, false)
+        dataStore.updateData {
+          it.copy {
+            clearLastWeightTime()
+            status = Status.NO_PERMISSIONS
+          }
+        }
+        widgetUpdater.updateWidgets()
         return Result.failure(e)
       } catch (e: Exception) {
         Log.e("SyncManager", "Error updating weight: ${e.message}", e)
-        widgetUpdater.updateWidgets(previousWeightTime, true, false)
+        dataStore.updateData { it.copy { status = Status.OK } }
+        widgetUpdater.updateWidgets()
         return Result.failure(e)
       }
 
     if (nextSettings == null) {
       Log.i("SyncManager", "Changes token expired, clearing and retrying")
-      dataStore.updateData { it.copy { clearChangesToken() } }
-      widgetUpdater.updateWidgets(previousWeightTime, true, false)
+      dataStore.updateData {
+        it.copy {
+          clearChangesToken()
+          status = Status.OK
+        }
+      }
+      widgetUpdater.updateWidgets()
       return Result.failure(IllegalStateException("Changes token expired"))
     }
 
     dataStore.updateData { nextSettings }
-    widgetUpdater.updateWidgets(nextSettings.lastWeightTimeOrNull?.toInstant(), true, false)
+    widgetUpdater.updateWidgets()
     return Result.success(Unit)
   }
 
@@ -150,6 +171,7 @@ constructor(
       } else {
         clearLastWeightTime()
       }
+      status = Status.OK
     }
   }
 }
