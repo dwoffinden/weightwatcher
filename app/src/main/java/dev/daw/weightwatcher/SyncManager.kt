@@ -63,12 +63,7 @@ constructor(
 
     if (!granted.containsAll(REQUIRED_PERMISSIONS)) {
       Log.i("SyncManager", "Permissions not granted, updating widget to Auth state")
-      dataStore.updateData {
-        it.copy {
-          clearLastWeightTime()
-          status = Status.NO_PERMISSIONS
-        }
-      }
+      dataStore.updateData { syncSettings { status = Status.NO_PERMISSIONS } }
       widgetUpdater.updateWidgets()
       return Result.success(Unit)
     }
@@ -85,12 +80,7 @@ constructor(
           "SyncManager",
           "SecurityException: Missing permissions for background read? ${e.message}",
         )
-        dataStore.updateData {
-          it.copy {
-            clearLastWeightTime()
-            status = Status.NO_PERMISSIONS
-          }
-        }
+        dataStore.updateData { syncSettings { status = Status.NO_PERMISSIONS } }
         widgetUpdater.updateWidgets()
         return Result.failure(e)
       } catch (e: Exception) {

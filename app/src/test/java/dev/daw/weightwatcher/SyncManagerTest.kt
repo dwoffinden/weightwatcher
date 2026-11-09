@@ -59,10 +59,14 @@ class SyncManagerTest {
   }
 
   @Test
-  fun performSync_missingPermissions_updatesStatusToNoPermissions() = runTest {
-    permissionController.revokeAllPermissions()
+  fun performSync_missingPermissions_clearsStateAndUpdatesStatusToNoPermissions() = runTest {
+    val recordTime = Instant.parse("2026-01-01T20:00:00Z")
+    fakeClient.insertRecords(listOf(weightRecordAt(recordTime)))
     val dataStore = createDataStore(backgroundScope)
     val syncManager = createSyncManager(dataStore)
+    syncManager.performSync()
+    permissionController.revokeAllPermissions()
+    observedWidgetStates.clear()
 
     val result: Result<Unit> = syncManager.performSync()
 
@@ -70,6 +74,33 @@ class SyncManagerTest {
     assertThat(observedWidgetStates)
       .containsExactly(syncSettings { status = Status.NO_PERMISSIONS })
   }
+
+  @Test
+  fun performSync_regrantedPermissionsAfterRevocation_queriesFromScratchAndRestoresWeightTime() =
+    runTest {
+      val recordTime = Instant.parse("2026-01-01T20:00:00Z")
+      fakeClient.insertRecords(listOf(weightRecordAt(recordTime)))
+      val dataStore = createDataStore(backgroundScope)
+      val syncManager = createSyncManager(dataStore)
+      syncManager.performSync()
+      permissionController.revokeAllPermissions()
+      syncManager.performSync()
+      permissionController.grantPermissions(SyncManager.REQUIRED_PERMISSIONS)
+
+      val result: Result<Unit> = syncManager.performSync()
+
+      assertThat(result.isSuccess).isTrue()
+      val savedSettings: SyncSettings = dataStore.data.first()
+      assertThat(savedSettings.changesToken).isNotEmpty()
+      assertThat(savedSettings)
+        .isEqualTo(
+          syncSettings {
+            changesToken = savedSettings.changesToken
+            lastWeightTime = recordTime.toTimestamp()
+            status = Status.OK
+          }
+        )
+    }
 
   @Test
   fun performSync_initialSyncWithRecord_persistsTokenWeightTimeAndStatus() = runTest {
