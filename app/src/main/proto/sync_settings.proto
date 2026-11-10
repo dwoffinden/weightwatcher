@@ -19,10 +19,13 @@ enum DataType {
 }
 
 message DataTypeState {
+  // Whether a sync is running isn't stored: see WeightWorker.isSyncing.
   enum Status {
+    reserved 2;
+    reserved SYNCING;
+
     STATUS_UNSPECIFIED = 0;
     OK = 1;
-    SYNCING = 2;
     NO_PERMISSIONS = 3;
   }
 

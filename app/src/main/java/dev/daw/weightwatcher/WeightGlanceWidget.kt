@@ -56,6 +56,7 @@ import dev.daw.weightwatcher.DataTypeState.Status
 import java.time.Duration
 import java.time.Instant
 import java.time.InstantSource
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
 /**
@@ -87,8 +88,12 @@ class WeightGlanceWidget : GlanceAppWidget() {
     internal fun formatStaleness(staleness: Duration): String =
       if (staleness < DAYS_THRESHOLD) "${staleness.toHours()}h" else "${staleness.toDays()}d"
 
-    internal fun isSyncing(status: Status): Boolean =
-      status == Status.SYNCING || status == Status.STATUS_UNSPECIFIED
+    /**
+     * Returns whether to show a data type as syncing: while a sync runs, or until its first sync
+     * finishes.
+     */
+    internal fun isSyncing(status: Status, isSyncRunning: Boolean): Boolean =
+      isSyncRunning || status == Status.STATUS_UNSPECIFIED
 
     /** Returns the supported [DataType] numbered [rawNumber], or `null` if there isn't one. */
     internal fun resolveDataType(rawNumber: Int?): DataType? =
@@ -170,11 +175,14 @@ class WeightGlanceWidget : GlanceAppWidget() {
     val dataStore: DataStore<SyncSettings> = dependencies.syncSettingsDataStore()
     val clock: InstantSource = dependencies.clock()
     val initialSettings: SyncSettings = dataStore.data.first()
+    val isSyncRunningFlow: Flow<Boolean> = WeightWorker.isSyncing(context)
+    val initialIsSyncRunning: Boolean = isSyncRunningFlow.first()
     val appWidgetId: Int = GlanceAppWidgetManager(context).getAppWidgetId(id)
     provideContent {
       val prefs: Preferences = currentState()
       val dataType: DataType? = resolveDataType(prefs[DATA_TYPE_PREF_KEY])
       val settings: SyncSettings by dataStore.data.collectAsState(initial = initialSettings)
+      val isSyncRunning: Boolean by isSyncRunningFlow.collectAsState(initial = initialIsSyncRunning)
 
       GlanceTheme {
         if (dataType == null) {
@@ -203,7 +211,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
             contentDescription = dataType.displayName,
             staleness = if (lastRecordTime != null) clock.instant() - lastRecordTime else null,
             hasPermissions = hasPermissions,
-            isSyncing = isSyncing(typeState.status),
+            isSyncing = isSyncing(typeState.status, isSyncRunning),
             onClick =
               if (hasPermissions) {
                 actionRunCallback<RefreshCallback>()

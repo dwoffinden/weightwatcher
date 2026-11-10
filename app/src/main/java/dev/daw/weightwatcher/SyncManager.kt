@@ -26,6 +26,7 @@ import javax.inject.Provider
 import javax.inject.Singleton
 import kotlin.comparisons.naturalOrder
 import kotlin.comparisons.nullsFirst
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.reflect.KClass
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -88,6 +89,10 @@ constructor(
   /**
    * Syncs every data type shown on a widget, plus [extraDataTypes] (e.g. the type being viewed in
    * the app).
+   *
+   * Reads from Health Connect inside a single [DataStore.updateData] transaction, so concurrent
+   * syncs run one after another, each starting from the state the previous one saved, and a sync
+   * that is cancelled or fails unexpectedly saves nothing.
    */
   suspend fun performSync(extraDataTypes: Set<DataType> = emptySet()): Result<Unit> {
     val typesToSync: Set<DataType> = activeDataTypesProvider.getActiveDataTypes() + extraDataTypes
@@ -99,7 +104,6 @@ constructor(
     val granted: Set<String> = healthConnectClient.permissionController.getGrantedPermissions()
     val hasBackgroundPermission: Boolean =
       HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND in granted
-
     val permittedTypes: Set<DataType> =
       if (hasBackgroundPermission) {
         typesToSync.filterTo(mutableSetOf()) { type -> type.readPermission in granted }
@@ -108,62 +112,61 @@ constructor(
       }
     val unpermittedTypes: Set<DataType> = typesToSync - permittedTypes
 
-    val settingsSnapshot: SyncSettings = dataStore.updateData { settings ->
+    // Lets widgets show that a sync is running (see WeightWorker.isSyncing).
+    widgetUpdater.updateWidgets()
+
+    var firstFailure: Throwable? = null
+    dataStore.updateData { settings ->
+      val results: Map<DataType, DataTypeSyncResult> = permittedTypes.associateWith { type ->
+        syncDataType(type, settings.stateFor(type))
+      }
+      firstFailure = results.values.firstNotNullOfOrNull { it.failure }
       settings.copy {
         for (type in unpermittedTypes) {
           statesByType[type.number] = dataTypeState { status = Status.NO_PERMISSIONS }
         }
-        for (type in permittedTypes) {
-          statesByType[type.number] = settings.stateFor(type).copy { status = Status.SYNCING }
+        for ((type, result) in results) {
+          statesByType[type.number] = result.state
         }
       }
     }
-    widgetUpdater.updateWidgets()
-
-    if (permittedTypes.isEmpty()) {
-      Log.i("SyncManager", "No permitted data types among $typesToSync")
-      return Result.success(Unit)
-    }
-
-    var firstFailure: Throwable? = null
-    val updatedStates = mutableMapOf<Int, DataTypeState>()
-
-    for (dataType in permittedTypes) {
-      val currentState: DataTypeState = settingsSnapshot.stateFor(dataType)
-      val nextState: DataTypeState? =
-        try {
-          fetchNextDataTypeState(dataType, currentState)
-        } catch (e: SecurityException) {
-          Log.e("SyncManager", "SecurityException syncing $dataType: ${e.message}")
-          updatedStates[dataType.number] = dataTypeState { status = Status.NO_PERMISSIONS }
-          if (firstFailure == null) firstFailure = e
-          continue
-        } catch (e: Exception) {
-          Log.e("SyncManager", "Error syncing $dataType: ${e.message}", e)
-          updatedStates[dataType.number] = currentState.copy { status = Status.OK }
-          if (firstFailure == null) firstFailure = e
-          continue
-        }
-
-      if (nextState == null) {
-        Log.i("SyncManager", "Changes token expired for $dataType, clearing and retrying")
-        updatedStates[dataType.number] = currentState.copy {
-          clearChangesToken()
-          status = Status.OK
-        }
-        if (firstFailure == null) {
-          firstFailure = IllegalStateException("Changes token expired for $dataType")
-        }
-      } else {
-        updatedStates[dataType.number] = nextState
-      }
-    }
-
-    dataStore.updateData { settings -> settings.copy { statesByType.putAll(updatedStates) } }
     widgetUpdater.updateWidgets()
 
     val failure: Throwable? = firstFailure
     return if (failure != null) Result.failure(failure) else Result.success(Unit)
+  }
+
+  /** The state to save for a data type after syncing it, and why the sync failed, if it did. */
+  private class DataTypeSyncResult(val state: DataTypeState, val failure: Throwable? = null)
+
+  /**
+   * Syncs [dataType] from [state], catching failures specific to it so that other types still sync.
+   */
+  private suspend fun syncDataType(dataType: DataType, state: DataTypeState): DataTypeSyncResult {
+    val nextState: DataTypeState? =
+      try {
+        fetchNextDataTypeState(dataType, state)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: SecurityException) {
+        Log.e("SyncManager", "SecurityException syncing $dataType: ${e.message}")
+        return DataTypeSyncResult(dataTypeState { status = Status.NO_PERMISSIONS }, e)
+      } catch (e: Exception) {
+        Log.e("SyncManager", "Error syncing $dataType: ${e.message}", e)
+        return DataTypeSyncResult(state.copy { status = Status.OK }, e)
+      }
+
+    if (nextState == null) {
+      Log.i("SyncManager", "Changes token expired for $dataType, clearing and retrying")
+      return DataTypeSyncResult(
+        state.copy {
+          clearChangesToken()
+          status = Status.OK
+        },
+        IllegalStateException("Changes token expired for $dataType"),
+      )
+    }
+    return DataTypeSyncResult(nextState)
   }
 
   /**

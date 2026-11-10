@@ -7,11 +7,15 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @HiltWorker
 class WeightWorker
@@ -57,6 +61,18 @@ constructor(
           ExistingPeriodicWorkPolicy.KEEP,
           periodicWorkRequest,
         )
+    }
+
+    /** Emits whether a sync is running. */
+    fun isSyncing(context: Context): Flow<Boolean> {
+      val workManager = WorkManager.getInstance(context)
+      return combine(
+          workManager.getWorkInfosForUniqueWorkFlow(PERIODIC_WORK_NAME),
+          workManager.getWorkInfosForUniqueWorkFlow(ONE_TIME_WORK_NAME),
+        ) { periodicWork, oneTimeWork ->
+          (periodicWork + oneTimeWork).any { workInfo -> workInfo.state == WorkInfo.State.RUNNING }
+        }
+        .distinctUntilChanged()
     }
 
     /**

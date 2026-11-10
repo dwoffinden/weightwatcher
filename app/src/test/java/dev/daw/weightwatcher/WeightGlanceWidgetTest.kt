@@ -1,6 +1,7 @@
 package dev.daw.weightwatcher
 
 import com.google.common.truth.Truth.assertThat
+import com.google.testing.junit.testparameterinjector.KotlinTestParameters.testValues
 import com.google.testing.junit.testparameterinjector.KotlinTestParameters.testValuesIn
 import com.google.testing.junit.testparameterinjector.TestParameter
 import com.google.testing.junit.testparameterinjector.TestParameterInjector
@@ -30,9 +31,21 @@ class WeightGlanceWidgetTest {
   }
 
   @Test
-  fun isSyncing_returnsTrueOnlyForSyncingAndUnspecified(@TestParameter status: Status) {
-    assertThat(WeightGlanceWidget.isSyncing(status))
-      .isEqualTo(status == Status.SYNCING || status == Status.STATUS_UNSPECIFIED)
+  fun isSyncing_syncRunning_returnsTrue(@TestParameter status: Status) {
+    assertThat(WeightGlanceWidget.isSyncing(status, isSyncRunning = true)).isTrue()
+  }
+
+  @Test
+  fun isSyncing_syncNotRunningBeforeFirstSync_returnsTrue() {
+    assertThat(WeightGlanceWidget.isSyncing(Status.STATUS_UNSPECIFIED, isSyncRunning = false))
+      .isTrue()
+  }
+
+  @Test
+  fun isSyncing_syncNotRunningAfterSync_returnsFalse(
+    @TestParameter status: Status = testValues(Status.OK, Status.NO_PERMISSIONS)
+  ) {
+    assertThat(WeightGlanceWidget.isSyncing(status, isSyncRunning = false)).isFalse()
   }
 
   @Test

@@ -10,6 +10,7 @@ import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
+import androidx.health.connect.client.response.ChangesResponse
 import androidx.health.connect.client.response.ReadRecordsResponse
 import androidx.health.connect.client.testing.FakeHealthConnectClient
 import androidx.health.connect.client.testing.FakePermissionController
@@ -23,8 +24,15 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.reflect.KClass
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -96,8 +104,8 @@ class SyncManagerTest {
       val result: Result<Unit> = syncManager.performSync()
 
       assertThat(result.isSuccess).isTrue()
-      assertThat(observedWidgetStates)
-        .containsExactly(
+      assertThat(observedWidgetStates.last())
+        .isEqualTo(
           syncSettings {
             statesByType[DataType.WEIGHT.number] = dataTypeState { status = Status.NO_PERMISSIONS }
           }
@@ -204,12 +212,7 @@ class SyncManagerTest {
         )
       assertThat(syncManager.lastRecordTime(DataType.WEIGHT).first()).isEqualTo(recordTime)
       assertThat(observedWidgetStates)
-        .containsExactly(
-          syncSettings {
-            statesByType[DataType.WEIGHT.number] = dataTypeState { status = Status.SYNCING }
-          },
-          savedSettings,
-        )
+        .containsExactly(SyncSettings.getDefaultInstance(), savedSettings)
         .inOrder()
     }
 
@@ -371,6 +374,47 @@ class SyncManagerTest {
     }
 
   @Test
+  fun performSync_cancelledWhileFetching_savesNothing() =
+    runBlocking<Unit> {
+      val weightTime = Instant.parse("2026-01-01T08:00:00Z")
+      fakeClient.insertRecords(listOf(weightRecordAt(weightTime)))
+      val dataStore = createDataStore()
+      createSyncManager(dataStore).performSync()
+      val settingsBefore: SyncSettings = dataStore.data.first()
+      fakeClient.insertRecords(listOf(weightRecordAt(weightTime + 1.hours)))
+      val hangingClient = HangingChangesClient(fakeClient)
+      val syncManager = createSyncManager(dataStore, client = hangingClient)
+      val sync: Job = launch { syncManager.performSync() }
+      hangingClient.changesRequested.await()
+
+      sync.cancelAndJoin()
+
+      assertThat(dataStore.data.first()).isEqualTo(settingsBefore)
+    }
+
+  @Test
+  fun performSync_concurrentSyncs_secondStartsFromFirstsResult() =
+    runBlocking<Unit> {
+      val firstTime = Instant.parse("2026-01-01T08:00:00Z")
+      fakeClient.insertRecords(listOf(weightRecordAt(firstTime)))
+      val dataStore = createDataStore()
+      createSyncManager(dataStore).performSync()
+      fakeClient.insertRecords(listOf(weightRecordAt(firstTime + 1.hours)))
+      val gatedClient = GatedChangesClient(fakeClient)
+      val syncManager = createSyncManager(dataStore, client = gatedClient)
+      val firstSync: Job = launch { syncManager.performSync() }
+      gatedClient.firstChangesRequested.await()
+      val secondSync: Job = launch { syncManager.performSync() }
+      yield()
+
+      gatedClient.gate.complete(Unit)
+      joinAll(firstSync, secondSync)
+
+      assertThat(gatedClient.requestedTokens).hasSize(2)
+      assertThat(gatedClient.requestedTokens).containsNoDuplicates()
+    }
+
+  @Test
   fun dataStore_corruptedFile_throwsCorruptionException() =
     runBlocking<Unit> {
       val file: File = tempFolder.newFile("corrupted_sync_settings.pb")
@@ -424,5 +468,35 @@ class SyncManagerTest {
       } else {
         delegate.readRecords(request)
       }
+  }
+
+  /**
+   * Records the tokens passed to [getChanges], and holds the first call until [gate] completes, so
+   * another sync can start meanwhile.
+   */
+  private class GatedChangesClient(private val delegate: HealthConnectClient) :
+    HealthConnectClient by delegate {
+    val firstChangesRequested = CompletableDeferred<Unit>()
+    val gate = CompletableDeferred<Unit>()
+    val requestedTokens = mutableListOf<String>()
+
+    override suspend fun getChanges(changesToken: String): ChangesResponse {
+      requestedTokens += changesToken
+      if (firstChangesRequested.complete(Unit)) {
+        gate.await()
+      }
+      return delegate.getChanges(changesToken)
+    }
+  }
+
+  /** Never returns from [getChanges], so a sync can be cancelled mid-fetch. */
+  private class HangingChangesClient(private val delegate: HealthConnectClient) :
+    HealthConnectClient by delegate {
+    val changesRequested = CompletableDeferred<Unit>()
+
+    override suspend fun getChanges(changesToken: String): ChangesResponse {
+      changesRequested.complete(Unit)
+      awaitCancellation()
+    }
   }
 }
