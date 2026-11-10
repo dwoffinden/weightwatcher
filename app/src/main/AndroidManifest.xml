@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
  <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+ <uses-permission android:name="android.permission.health.READ_STEPS" />
+ <uses-permission android:name="android.permission.health.READ_SLEEP" />
+ <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+ <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+ <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+ <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+ <uses-permission android:name="android.permission.health.READ_VO2_MAX" />
+ <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
  <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
  <application
         android:name=".WeightWatcherApplication"
@@ -26,6 +34,9 @@
     <action android:name="android.intent.action.MAIN" />
     <category android:name="android.intent.category.LAUNCHER" />
    </intent-filter>
+   <intent-filter>
+    <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+   </intent-filter>
   </activity>
   <activity-alias
             android:name=".ViewPermissionUsageActivity"
@@ -47,6 +58,9 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/weight_widget_info" />
   </receiver>
+  <receiver
+            android:name=".WidgetPinReceiver"
+            android:exported="false" />
   <!-- Provide a way for Health Connect to show privacy policy rationale -->
   <activity
             android:name=".PermissionsRationaleActivity"

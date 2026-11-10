@@ -31,4 +31,11 @@ object AppModule {
   fun provideWidgetUpdater(@ApplicationContext context: Context): WidgetUpdater = WidgetUpdater {
     WeightGlanceWidget().updateAll(context)
   }
+
+  @Provides
+  fun provideActiveDataTypesProvider(
+    @ApplicationContext context: Context
+  ): ActiveDataTypesProvider = ActiveDataTypesProvider {
+    WeightGlanceWidget.getActiveDataTypes(context)
+  }
 }

@@ -9,6 +9,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
@@ -22,7 +23,14 @@ constructor(
 ) : CoroutineWorker(appContext, workerParams) {
 
   override suspend fun doWork(): Result {
-    val result = syncManager.performSync()
+    val extraDataTypes: Set<DataType> =
+      inputData
+        .getIntArray(KEY_EXTRA_DATA_TYPES)
+        ?.asSequence()
+        ?.mapNotNull { WeightGlanceWidget.resolveDataType(it) }
+        ?.toSet()
+        .orEmpty()
+    val result = syncManager.performSync(extraDataTypes)
     return if (result.isSuccess) {
       Result.success()
     } else {
@@ -31,7 +39,9 @@ constructor(
   }
 
   companion object {
-    private const val WORK_NAME = "WeightPeriodicSync"
+    private const val PERIODIC_WORK_NAME = "WeightPeriodicSync"
+    private const val ONE_TIME_WORK_NAME = "WeightOneTimeSync"
+    private const val KEY_EXTRA_DATA_TYPES = "extra_data_types"
 
     fun enqueuePeriodicWork(context: Context) {
       val periodicWorkRequest =
@@ -42,13 +52,28 @@ constructor(
           .build()
 
       WorkManager.getInstance(context)
-        .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, periodicWorkRequest)
+        .enqueueUniquePeriodicWork(
+          PERIODIC_WORK_NAME,
+          ExistingPeriodicWorkPolicy.KEEP,
+          periodicWorkRequest,
+        )
     }
 
-    fun enqueueOneTimeWork(context: Context) {
-      val request = OneTimeWorkRequestBuilder<WeightWorker>().build()
+    /**
+     * Requests a sync of every data type shown on a widget, plus [extraDataTypes].
+     *
+     * If a one-off sync is already queued or running, this one runs after it rather than being
+     * dropped, since the running sync may have read the widgets' data types before a change.
+     */
+    fun enqueueOneTimeWork(context: Context, extraDataTypes: Set<DataType> = emptySet()) {
+      val request =
+        OneTimeWorkRequestBuilder<WeightWorker>()
+          .setInputData(
+            workDataOf(KEY_EXTRA_DATA_TYPES to extraDataTypes.map { it.number }.toIntArray())
+          )
+          .build()
       WorkManager.getInstance(context)
-        .enqueueUniqueWork("WeightOneTimeSync", ExistingWorkPolicy.KEEP, request)
+        .enqueueUniqueWork(ONE_TIME_WORK_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
   }
 }

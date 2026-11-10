@@ -5,15 +5,38 @@ option java_package = "dev.daw.weightwatcher";
 
 import "google/protobuf/timestamp.proto";
 
-message SyncSettings {
-  string changes_token = 1;
-  .google.protobuf.Timestamp last_weight_time = 2;
+enum DataType {
+  DATA_TYPE_UNSPECIFIED = 0;
+  WEIGHT = 1;
+  STEPS = 2;
+  SLEEP = 3;
+  EXERCISE = 4;
+  HEART_RATE = 5;
+  RESTING_HEART_RATE = 6;
+  BODY_FAT = 7;
+  VO2_MAX = 8;
+  BLOOD_PRESSURE = 9;
+}
 
+message DataTypeState {
   enum Status {
     STATUS_UNSPECIFIED = 0;
     OK = 1;
     SYNCING = 2;
     NO_PERMISSIONS = 3;
   }
+
+  string changes_token = 1;
+  .google.protobuf.Timestamp last_record_time = 2;
   Status status = 3;
+}
+
+message SyncSettings {
+  reserved 1, 2, 3;
+
+  // Keyed by DataType number, since map keys can't be enums.
+  map<int32, DataTypeState> states_by_type = 4;
+
+  // Whether widgets placed before per-widget data types existed have been assigned WEIGHT.
+  bool legacy_widgets_migrated = 5;
 }

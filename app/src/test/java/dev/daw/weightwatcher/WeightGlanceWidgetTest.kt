@@ -1,10 +1,11 @@
 package dev.daw.weightwatcher
 
 import com.google.common.truth.Truth.assertThat
+import com.google.testing.junit.testparameterinjector.KotlinTestParameters.testValuesIn
 import com.google.testing.junit.testparameterinjector.TestParameter
 import com.google.testing.junit.testparameterinjector.TestParameterInjector
 import com.google.testing.junit.testparameterinjector.TestParameters
-import dev.daw.weightwatcher.SyncSettings.Status
+import dev.daw.weightwatcher.DataTypeState.Status
 import java.time.Duration
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,5 +33,24 @@ class WeightGlanceWidgetTest {
   fun isSyncing_returnsTrueOnlyForSyncingAndUnspecified(@TestParameter status: Status) {
     assertThat(WeightGlanceWidget.isSyncing(status))
       .isEqualTo(status == Status.SYNCING || status == Status.STATUS_UNSPECIFIED)
+  }
+
+  @Test
+  fun resolveDataType_null_returnsNull() {
+    assertThat(WeightGlanceWidget.resolveDataType(null)).isNull()
+  }
+
+  @Test
+  fun resolveDataType_supportedTypeNumber_returnsType(
+    @TestParameter dataType: DataType = testValuesIn(SUPPORTED_DATA_TYPES)
+  ) {
+    assertThat(WeightGlanceWidget.resolveDataType(dataType.number)).isEqualTo(dataType)
+  }
+
+  @Test
+  fun resolveDataType_unsupportedNumber_returnsNull(
+    @TestParameter("0", "-1", "999") rawNumber: Int
+  ) {
+    assertThat(WeightGlanceWidget.resolveDataType(rawNumber)).isNull()
   }
 }

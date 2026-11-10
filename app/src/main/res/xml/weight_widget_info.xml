@@ -6,5 +6,7 @@
     android:targetCellHeight="1"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen"
+    android:configure="dev.daw.weightwatcher.MainActivity"
+    android:widgetFeatures="reconfigurable"
     android:description="@string/widget_description"
     />

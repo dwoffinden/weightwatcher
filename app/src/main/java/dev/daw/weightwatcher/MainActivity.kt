@@ -1,6 +1,7 @@
 package dev.daw.weightwatcher
 
 import android.appwidget.AppWidgetManager
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -9,13 +10,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -30,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.health.connect.client.HealthConnectClient
@@ -48,11 +57,15 @@ import kotlinx.coroutines.withContext
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+  companion object {
+    const val EXTRA_DATA_TYPE = "dev.daw.weightwatcher.EXTRA_DATA_TYPE"
+  }
+
   @set:Inject
   @setparam:HealthConnectSdkStatus
   var sdkStatus: Int = HealthConnectClient.SDK_UNAVAILABLE
-  @Inject lateinit var healthConnectClientProvider: Provider<HealthConnectClient>
-  @Inject lateinit var syncManager: SyncManager
+  @field:Inject lateinit var healthConnectClientProvider: Provider<HealthConnectClient>
+  @field:Inject lateinit var syncManager: SyncManager
 
   private val glanceAppWidget = WeightGlanceWidget()
 
@@ -60,14 +73,39 @@ class MainActivity : ComponentActivity() {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     Log.i("MainActivity", "onCreate called")
-    setContent { WeightWatcherApp() }
+
+    val configureWidgetId: Int =
+      intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+    if (configureWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+      setResult(
+        RESULT_CANCELED,
+        Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, configureWidgetId),
+      )
+    }
+
+    val initialDataType: DataType =
+      WeightGlanceWidget.resolveDataType(intent.getIntExtra(EXTRA_DATA_TYPE, 0)) ?: DataType.WEIGHT
+
+    setContent {
+      WeightWatcherApp(configureWidgetId = configureWidgetId, initialDataType = initialDataType)
+    }
   }
 
+  @OptIn(ExperimentalLayoutApi::class)
   @Composable
-  fun WeightWatcherApp() {
+  fun WeightWatcherApp(
+    configureWidgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID,
+    initialDataType: DataType = DataType.WEIGHT,
+  ) {
     Log.i("MainActivity", "Health Connect SDK Status: $sdkStatus")
-    var hasPermissions by remember { mutableStateOf(false) }
-    val lastWeightTime: Instant? by syncManager.lastWeightTime.collectAsState(initial = null)
+    val isConfigureMode: Boolean = configureWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
+    var selectedDataType: DataType by remember { mutableStateOf(initialDataType) }
+    var grantedPermissions: Set<String> by remember { mutableStateOf(emptySet()) }
+    val hasPermissions: Boolean =
+      grantedPermissions.containsAll(selectedDataType.requiredPermissions)
+    val lastRecordTime: Instant? by
+      remember(selectedDataType) { syncManager.lastRecordTime(selectedDataType) }
+        .collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
 
     val requestPermissionActivityContract =
@@ -75,28 +113,40 @@ class MainActivity : ComponentActivity() {
     val requestPermissions =
       rememberLauncherForActivityResult(requestPermissionActivityContract) { granted ->
         Log.i("MainActivity", "Permissions request result: $granted")
-        hasPermissions = granted.containsAll(SyncManager.REQUIRED_PERMISSIONS)
-        if (hasPermissions) {
-          Log.i("MainActivity", "All permissions granted! Enqueuing sync...")
-          // Immediate visual update to fix widget click behavior
-          coroutineScope.launch { syncManager.resetStatus() }
-          WeightWorker.enqueueOneTimeWork(this@MainActivity)
+        grantedPermissions = grantedPermissions + granted
+        if (grantedPermissions.containsAll(selectedDataType.requiredPermissions)) {
+          Log.i("MainActivity", "Permissions granted for $selectedDataType! Enqueuing sync...")
+          WeightWorker.enqueuePeriodicWork(this@MainActivity)
+          WeightWorker.enqueueOneTimeWork(this@MainActivity, setOf(selectedDataType))
         }
       }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(configureWidgetId) {
+      if (isConfigureMode) {
+        val manager = GlanceAppWidgetManager(this@MainActivity)
+        val glanceId = runCatching { manager.getGlanceIdBy(configureWidgetId) }.getOrNull()
+        val widgetDataType: DataType? = glanceId?.let {
+          WeightGlanceWidget.getWidgetDataType(this@MainActivity, it)
+        }
+        if (widgetDataType != null) {
+          selectedDataType = widgetDataType
+        }
+      }
+    }
+
+    LaunchedEffect(selectedDataType) {
       if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
-        val granted =
+        val granted: Set<String> =
           withContext(Dispatchers.IO) {
             healthConnectClientProvider.get().permissionController.getGrantedPermissions()
           }
-        hasPermissions = granted.containsAll(SyncManager.REQUIRED_PERMISSIONS)
-        Log.i("MainActivity", "Initial permissions check: $hasPermissions")
-        if (hasPermissions) {
-          syncManager.resetStatus()
-          // Enqueue worker
+        grantedPermissions = granted
+        val permitted: Boolean = granted.containsAll(selectedDataType.requiredPermissions)
+        Log.i("MainActivity", "Permissions check for $selectedDataType: $permitted")
+        if (permitted) {
+          // Sync in a worker, not this effect's scope, so switching types can't cancel a sync.
           WeightWorker.enqueuePeriodicWork(this@MainActivity)
-          WeightWorker.enqueueOneTimeWork(this@MainActivity)
+          WeightWorker.enqueueOneTimeWork(this@MainActivity, setOf(selectedDataType))
         }
       }
     }
@@ -104,12 +154,16 @@ class MainActivity : ComponentActivity() {
     WeightWatcherTheme {
       Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
-          modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),
+          modifier =
+            Modifier.fillMaxSize()
+              .safeDrawingPadding()
+              .verticalScroll(rememberScrollState())
+              .padding(16.dp),
           horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.Center,
         ) {
           Text("WeightWatcher Widget Setup", style = MaterialTheme.typography.headlineMedium)
-          Spacer(modifier = Modifier.height(32.dp))
+          Spacer(modifier = Modifier.height(24.dp))
 
           if (sdkStatus != HealthConnectClient.SDK_AVAILABLE) {
             val errorMessage =
@@ -122,54 +176,104 @@ class MainActivity : ComponentActivity() {
               }
             Text(errorMessage, color = MaterialTheme.colorScheme.error)
           } else {
+            Text("Select data type to track:", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            FlowRow(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+              verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+              for (dataType in SUPPORTED_DATA_TYPES) {
+                FilterChip(
+                  selected = dataType == selectedDataType,
+                  onClick = { selectedDataType = dataType },
+                  label = { Text(dataType.displayName) },
+                  leadingIcon = {
+                    Icon(
+                      painter = painterResource(dataType.iconRes),
+                      contentDescription = null,
+                      modifier = Modifier.size(18.dp),
+                    )
+                  },
+                )
+              }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             if (hasPermissions) {
               Text("Permissions granted! 😊")
               Spacer(modifier = Modifier.height(16.dp))
 
-              val currentLastWeightTime: Instant? = lastWeightTime
-              if (currentLastWeightTime != null) {
+              val currentLastRecordTime: Instant? = lastRecordTime
+              if (currentLastRecordTime != null) {
                 val formatter = remember {
                   DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
                     .withZone(ZoneId.systemDefault())
                 }
                 Text(
-                  "Last weight log found: ${formatter.format(currentLastWeightTime)}",
+                  "Last ${selectedDataType.nameInSentence} log found: ${formatter.format(currentLastRecordTime)}",
                   style = MaterialTheme.typography.bodyMedium,
                   color = MaterialTheme.colorScheme.secondary,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
               }
 
-              Text("You can now add the widget to your home screen.")
-              Spacer(modifier = Modifier.height(24.dp))
-
-              val appWidgetManager = AppWidgetManager.getInstance(this@MainActivity)
-              if (appWidgetManager.isRequestPinAppWidgetSupported) {
+              if (isConfigureMode) {
                 Button(
                   onClick = {
+                    val chosenType = selectedDataType
                     coroutineScope.launch {
-                      val manager = GlanceAppWidgetManager(this@MainActivity)
-                      manager.requestPinGlanceAppWidget(
-                        receiver = WeightGlanceWidgetReceiver::class.java,
-                        preview = glanceAppWidget,
+                      glanceAppWidget.configure(this@MainActivity, configureWidgetId, chosenType)
+                      setResult(
+                        RESULT_OK,
+                        Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, configureWidgetId),
                       )
+                      finish()
                     }
                   },
                   modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
                 ) {
-                  Text("Pin Widget to Home Screen")
+                  Text("Save ${selectedDataType.displayName} Widget")
+                }
+              } else {
+                Text("You can now add the widget to your home screen.")
+                Spacer(modifier = Modifier.height(24.dp))
+
+                val appWidgetManager = AppWidgetManager.getInstance(this@MainActivity)
+                if (appWidgetManager.isRequestPinAppWidgetSupported) {
+                  Button(
+                    onClick = {
+                      val chosenType = selectedDataType
+                      coroutineScope.launch {
+                        val manager = GlanceAppWidgetManager(this@MainActivity)
+                        manager.requestPinGlanceAppWidget(
+                          receiver = WeightGlanceWidgetReceiver::class.java,
+                          preview = glanceAppWidget,
+                          previewState = WeightGlanceWidget.previewPreferences(chosenType),
+                          successCallback =
+                            WidgetPinReceiver.createSuccessCallback(this@MainActivity, chosenType),
+                        )
+                      }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                  ) {
+                    Text("Pin ${selectedDataType.displayName} Widget to Home Screen")
+                  }
                 }
               }
             } else {
-              Text("Need Health Connect read permissions for weight.")
+              Text("Need Health Connect read permissions for ${selectedDataType.nameInSentence}.")
               Spacer(modifier = Modifier.height(16.dp))
               Button(
                 onClick = {
+                  val permissionsToRequest = selectedDataType.requiredPermissions
                   Log.i(
                     "MainActivity",
-                    "Grant Permissions button clicked. Requesting: ${SyncManager.REQUIRED_PERMISSIONS}",
+                    "Grant Permissions button clicked. Requesting: $permissionsToRequest",
                   )
-                  requestPermissions.launch(SyncManager.REQUIRED_PERMISSIONS)
+                  requestPermissions.launch(permissionsToRequest)
                 }
               ) {
                 Text("Grant Permissions")
