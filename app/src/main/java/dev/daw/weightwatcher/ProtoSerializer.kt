@@ -2,20 +2,22 @@ package dev.daw.weightwatcher
 
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer
+import com.google.protobuf.GeneratedMessageLite
 import com.google.protobuf.InvalidProtocolBufferException
-import com.google.protobuf.MessageLite
-import com.google.protobuf.Parser
 import java.io.InputStream
 import java.io.OutputStream
 
-/** A generic DataStore [Serializer] for any Protobuf [MessageLite]. */
-class ProtoSerializer<T : MessageLite>(
-  override val defaultValue: T,
-  private val parser: Parser<T>,
-) : Serializer<T> {
+/**
+ * A generic DataStore [Serializer] for any generated Protobuf Lite message.
+ *
+ * `T` is bounded by [GeneratedMessageLite] rather than [com.google.protobuf.MessageLite] because
+ * only the former's `getParserForType` returns a `Parser<T>`.
+ */
+class ProtoSerializer<T : GeneratedMessageLite<T, *>>(override val defaultValue: T) :
+  Serializer<T> {
   override suspend fun readFrom(input: InputStream): T =
     try {
-      parser.parseFrom(input)
+      defaultValue.parserForType.parseFrom(input)
     } catch (exception: InvalidProtocolBufferException) {
       throw CorruptionException("Cannot read proto.", exception)
     }

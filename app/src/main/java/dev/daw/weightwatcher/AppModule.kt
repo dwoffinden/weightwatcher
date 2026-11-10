@@ -21,7 +21,7 @@ object AppModule {
   @Singleton
   fun provideSyncSettingsDataStore(@ApplicationContext context: Context): DataStore<SyncSettings> =
     DataStoreFactory.create(
-      serializer = ProtoSerializer(SyncSettings.getDefaultInstance(), SyncSettings.parser()),
+      serializer = ProtoSerializer(SyncSettings.getDefaultInstance()),
       produceFile = { context.dataStoreFile("sync_settings.pb") },
     )
 

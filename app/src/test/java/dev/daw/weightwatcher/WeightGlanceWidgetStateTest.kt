@@ -38,7 +38,7 @@ class WeightGlanceWidgetStateTest {
     val file: File = tempFolder.newFile()
     this.dataStore =
       DataStoreFactory.create(
-        serializer = ProtoSerializer(SyncSettings.getDefaultInstance(), SyncSettings.parser()),
+        serializer = ProtoSerializer(SyncSettings.getDefaultInstance()),
         produceFile = { file },
       )
   }

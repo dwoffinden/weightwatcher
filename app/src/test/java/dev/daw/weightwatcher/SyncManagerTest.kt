@@ -421,7 +421,7 @@ class SyncManagerTest {
       file.writeBytes(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
       val dataStore: DataStore<SyncSettings> =
         DataStoreFactory.create(
-          serializer = ProtoSerializer(SyncSettings.getDefaultInstance(), SyncSettings.parser()),
+          serializer = ProtoSerializer(SyncSettings.getDefaultInstance()),
           produceFile = { file },
         )
 
@@ -431,7 +431,7 @@ class SyncManagerTest {
   private fun createDataStore(): DataStore<SyncSettings> {
     val file: File = tempFolder.newFile()
     return DataStoreFactory.create(
-      serializer = ProtoSerializer(SyncSettings.getDefaultInstance(), SyncSettings.parser()),
+      serializer = ProtoSerializer(SyncSettings.getDefaultInstance()),
       produceFile = { file },
     )
   }
