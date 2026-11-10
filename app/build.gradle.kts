@@ -9,7 +9,6 @@ plugins {
 android {
   namespace = "dev.daw.weightwatcher"
   compileSdk = 37
-  // compileSdkExtension = 22
   buildToolsVersion = "37.0.0"
 
   defaultConfig {
