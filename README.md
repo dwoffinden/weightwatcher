@@ -4,7 +4,7 @@ An Android home screen widget that shows how long ago you last logged a type of 
 
 ## Features
 
-- **1x1 Home Screen Widget**: Shows hours since the last record of the widget's data type, with a green check (≤ 20 hours) or red cross (> 20 hours).
+- **1x1 Home Screen Widget**: Shows the data type's icon and the time since its last record (in hours, or days after 72 hours). The icon is in the theme's primary colour up to 20 hours, and in the error colour after that.
 - **Multiple Data Types**: Each widget tracks one data type, picked when adding the widget (from the launcher or via the app's pin button) and changeable later by reconfiguring it. Read permission is requested per data type.
 - **Incremental Sync**: Polls the Health Connect [Changelog API](https://developer.android.com/reference/kotlin/androidx/health/connect/client/HealthConnectClient#getChanges(kotlin.String)) every 30 minutes via `WorkManager`, with a separate changes token per data type.
 - **Tap to Refresh**: Tapping the widget triggers an immediate sync (or opens the permission setup screen if permissions are missing).
