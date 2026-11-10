@@ -262,8 +262,10 @@ class WeightGlanceWidget : GlanceAppWidget() {
 
       val iconTint =
         when {
-          isSyncing || staleness == null -> GlanceTheme.colors.onSurfaceVariant
-          !hasPermissions || staleness > STALE_THRESHOLD -> GlanceTheme.colors.error
+          isSyncing -> GlanceTheme.colors.onSurfaceVariant
+          !hasPermissions -> GlanceTheme.colors.error
+          staleness == null -> GlanceTheme.colors.onSurfaceVariant
+          staleness > STALE_THRESHOLD -> GlanceTheme.colors.error
           else -> GlanceTheme.colors.primary
         }
 
