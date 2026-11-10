@@ -1,6 +1,6 @@
 # WeightWatcher
 
-An Android home screen widget that shows how long ago you last logged a type of health data (weight, steps, sleep, exercise, heart rate, resting heart rate, body fat, VO₂ max or blood pressure) in Health Connect.
+An Android home screen widget that shows how long ago you last logged a type of health data (weight, heart rate, blood pressure, etc.) in Health Connect.
 
 ## Features
 
