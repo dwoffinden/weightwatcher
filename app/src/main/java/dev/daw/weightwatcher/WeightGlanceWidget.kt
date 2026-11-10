@@ -18,6 +18,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.appWidgetBackground
@@ -36,17 +37,32 @@ import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import dev.daw.weightwatcher.SyncSettings.Status
 import java.time.Duration
 import java.time.Instant
 import java.time.InstantSource
-import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 
-class WeightGlanceWidget
-@Inject
-constructor(private val dataStore: DataStore<SyncSettings>, private val clock: InstantSource) :
-  GlanceAppWidget() {
+/**
+ * The home screen widget.
+ *
+ * Has no constructor dependencies because Glance instantiates [WeightGlanceWidgetReceiver] by
+ * reflection (to map receivers to widgets) and reads its [GlanceAppWidgetReceiver.glanceAppWidget]
+ * without injecting it. [provideGlance] gets its dependencies through [Dependencies] instead.
+ */
+class WeightGlanceWidget : GlanceAppWidget() {
+
+  @EntryPoint
+  @InstallIn(SingletonComponent::class)
+  interface Dependencies {
+    fun syncSettingsDataStore(): DataStore<SyncSettings>
+
+    fun clock(): InstantSource
+  }
 
   companion object {
     private val STALE_THRESHOLD: Duration = 20.hours
@@ -62,6 +78,9 @@ constructor(private val dataStore: DataStore<SyncSettings>, private val clock: I
   override val stateDefinition: GlanceStateDefinition<*>? = null
 
   override suspend fun provideGlance(context: Context, id: GlanceId) {
+    val dependencies: Dependencies = EntryPointAccessors.fromApplication(context)
+    val dataStore: DataStore<SyncSettings> = dependencies.syncSettingsDataStore()
+    val clock: InstantSource = dependencies.clock()
     val initialState: SyncSettings = dataStore.data.first()
     provideContent {
       val state: SyncSettings by dataStore.data.collectAsState(initial = initialState)
@@ -71,7 +90,7 @@ constructor(private val dataStore: DataStore<SyncSettings>, private val clock: I
       GlanceTheme {
         WidgetContent(
           context,
-          lastWeightTime,
+          staleness = if (lastWeightTime != null) clock.instant() - lastWeightTime else null,
           hasPermissions = status != Status.NO_PERMISSIONS,
           isSyncing = isSyncing(status),
         )
@@ -82,12 +101,10 @@ constructor(private val dataStore: DataStore<SyncSettings>, private val clock: I
   @Composable
   private fun WidgetContent(
     context: Context,
-    lastWeightTime: Instant?,
+    staleness: Duration?,
     hasPermissions: Boolean,
     isSyncing: Boolean,
   ) {
-    val staleness: Duration? =
-      if (lastWeightTime != null) clock.instant() - lastWeightTime else null
     val backgroundColor =
       ColorProvider(
         day = dynamicLightColorScheme(context).surfaceContainer.copy(alpha = 0.8f),

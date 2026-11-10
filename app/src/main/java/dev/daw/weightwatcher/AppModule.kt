@@ -28,8 +28,7 @@ object AppModule {
   @Provides fun provideClock(): InstantSource = InstantSource.system()
 
   @Provides
-  fun provideWidgetUpdater(
-    @ApplicationContext context: Context,
-    widget: WeightGlanceWidget,
-  ): WidgetUpdater = WidgetUpdater { widget.updateAll(context) }
+  fun provideWidgetUpdater(@ApplicationContext context: Context): WidgetUpdater = WidgetUpdater {
+    WeightGlanceWidget().updateAll(context)
+  }
 }

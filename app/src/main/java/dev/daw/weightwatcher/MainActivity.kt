@@ -53,7 +53,8 @@ class MainActivity : ComponentActivity() {
   var sdkStatus: Int = HealthConnectClient.SDK_UNAVAILABLE
   @Inject lateinit var healthConnectClientProvider: Provider<HealthConnectClient>
   @Inject lateinit var syncManager: SyncManager
-  @Inject lateinit var glanceAppWidget: WeightGlanceWidget
+
+  private val glanceAppWidget = WeightGlanceWidget()
 
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
