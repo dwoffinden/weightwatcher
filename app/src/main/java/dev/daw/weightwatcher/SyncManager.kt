@@ -84,15 +84,14 @@ constructor(
     }
 
   /**
-   * Syncs every data type shown on a widget, plus [extraDataTypes] (e.g. the type being viewed in
-   * the app).
+   * Syncs every data type shown on a widget.
    *
    * Reads from Health Connect inside a single [DataStore.updateData] transaction, so concurrent
    * syncs run one after another, each starting from the state the previous one saved, and a sync
    * that is cancelled or fails unexpectedly saves nothing.
    */
-  suspend fun performSync(extraDataTypes: Set<DataType> = emptySet()): Result<Unit> {
-    val typesToSync: Set<DataType> = activeDataTypesProvider.getActiveDataTypes() + extraDataTypes
+  suspend fun performSync(): Result<Unit> {
+    val typesToSync: Set<DataType> = activeDataTypesProvider.getActiveDataTypes()
     if (typesToSync.isEmpty()) {
       Log.i("SyncManager", "No active widget data types to sync")
       return Result.success(Unit)

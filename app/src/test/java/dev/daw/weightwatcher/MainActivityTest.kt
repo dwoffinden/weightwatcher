@@ -108,7 +108,7 @@ class MainActivityTest {
   }
 
   @Test
-  fun configureMode_savingType_storesItOnWidgetAndReturnsOk() {
+  fun configureMode_selectingPermittedType_storesItOnWidgetAndReturnsOk() {
     fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
     permissionController.grantPermissions(DataType.STEPS.requiredPermissions)
     val appWidgetId: Int = placeWidget(context)
@@ -121,7 +121,6 @@ class MainActivityTest {
       lateinit var activity: MainActivity
       scenario.onActivity { activity = it }
       composeTestRule.onNodeWithText("Steps").performClick()
-      composeTestRule.onNodeWithText("Save Steps Widget").performClick()
 
       // Saving is asynchronous.
       composeTestRule.waitUntil(timeoutMillis = 5_000) { activity.isFinishing }

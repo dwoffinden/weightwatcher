@@ -308,20 +308,6 @@ class SyncManagerTest {
     }
 
   @Test
-  fun performSync_extraDataTypeWithoutWidget_syncsIt() =
-    runBlocking<Unit> {
-      activeDataTypes = emptySet()
-      val recordTime = Instant.parse("2026-01-01T20:00:00Z")
-      fakeClient.insertRecords(listOf(sampleRecordOf(DataType.STEPS, recordTime)))
-      val dataStore = createDataStore()
-      val syncManager = createSyncManager(dataStore)
-
-      syncManager.performSync(extraDataTypes = setOf(DataType.STEPS))
-
-      assertThat(syncManager.lastRecordTime(DataType.STEPS).first()).isEqualTo(recordTime)
-    }
-
-  @Test
   fun performSync_deltaSyncWithNewRecordOfOneType_keepsOtherTypesLastRecordTime() =
     runBlocking<Unit> {
       activeDataTypes = setOf(DataType.WEIGHT, DataType.STEPS)

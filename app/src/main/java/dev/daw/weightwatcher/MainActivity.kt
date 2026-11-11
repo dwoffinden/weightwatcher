@@ -104,16 +104,29 @@ class MainActivity : ComponentActivity() {
     // Null until loaded.
     var sdkStatus: Int? by remember { mutableStateOf(null) }
 
+    fun saveConfiguredWidgetAndFinish(dataType: DataType) {
+      coroutineScope.launch {
+        glanceAppWidget.configure(this@MainActivity, configureWidgetId, dataType)
+        setResult(
+          RESULT_OK,
+          Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, configureWidgetId),
+        )
+        finish()
+      }
+    }
+
     val requestPermissionActivityContract =
       PermissionController.createRequestPermissionResultContract()
     val requestPermissions =
       rememberLauncherForActivityResult(requestPermissionActivityContract) { granted ->
         Log.i("MainActivity", "Permissions request result: $granted")
-        grantedPermissions = grantedPermissions + granted
-        if (grantedPermissions.containsAll(selectedDataType.requiredPermissions)) {
-          Log.i("MainActivity", "Permissions granted for $selectedDataType! Enqueuing sync...")
-          WeightWorker.enqueuePeriodicWork(this@MainActivity)
-          WeightWorker.enqueueOneTimeWork(this@MainActivity, setOf(selectedDataType))
+        val updatedPermissions: Set<String> = grantedPermissions + granted
+        grantedPermissions = updatedPermissions
+        if (updatedPermissions.containsAll(selectedDataType.requiredPermissions)) {
+          Log.i("MainActivity", "Permissions granted for $selectedDataType!")
+          if (isConfigureMode) {
+            saveConfiguredWidgetAndFinish(selectedDataType)
+          }
         }
       }
 
@@ -136,18 +149,10 @@ class MainActivity : ComponentActivity() {
       }
     }
 
-    LaunchedEffect(selectedDataType, sdkStatus) {
+    LaunchedEffect(sdkStatus) {
       if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
-        val granted: Set<String> =
+        grantedPermissions =
           healthConnectAccess.client().permissionController.getGrantedPermissions()
-        grantedPermissions = granted
-        val permitted: Boolean = granted.containsAll(selectedDataType.requiredPermissions)
-        Log.i("MainActivity", "Permissions check for $selectedDataType: $permitted")
-        if (permitted) {
-          // Sync in a worker, not this effect's scope, so switching types can't cancel a sync.
-          WeightWorker.enqueuePeriodicWork(this@MainActivity)
-          WeightWorker.enqueueOneTimeWork(this@MainActivity, setOf(selectedDataType))
-        }
       }
     }
 
@@ -190,7 +195,15 @@ class MainActivity : ComponentActivity() {
               for (dataType in SUPPORTED_DATA_TYPES) {
                 FilterChip(
                   selected = dataType == selectedDataType,
-                  onClick = { selectedDataType = dataType },
+                  onClick = {
+                    selectedDataType = dataType
+                    if (
+                      isConfigureMode &&
+                        grantedPermissions.containsAll(dataType.requiredPermissions)
+                    ) {
+                      saveConfiguredWidgetAndFinish(dataType)
+                    }
+                  },
                   label = { Text(dataType.displayName) },
                   leadingIcon = {
                     Icon(
@@ -223,24 +236,7 @@ class MainActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(16.dp))
               }
 
-              if (isConfigureMode) {
-                Button(
-                  onClick = {
-                    val chosenType = selectedDataType
-                    coroutineScope.launch {
-                      glanceAppWidget.configure(this@MainActivity, configureWidgetId, chosenType)
-                      setResult(
-                        RESULT_OK,
-                        Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, configureWidgetId),
-                      )
-                      finish()
-                    }
-                  },
-                  modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
-                ) {
-                  Text("Save ${selectedDataType.displayName} Widget")
-                }
-              } else {
+              if (!isConfigureMode) {
                 Text("You can now add the widget to your home screen.")
                 Spacer(modifier = Modifier.height(24.dp))
 
