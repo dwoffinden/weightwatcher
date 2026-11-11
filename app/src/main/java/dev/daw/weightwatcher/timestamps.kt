@@ -33,6 +33,20 @@ val Int.minutes: Duration
 val Long.minutes: Duration
   get() = Duration.ofMinutes(this)
 
+/**
+ * Returns a [Duration] of this many seconds (the [java.time.Duration] equivalent of
+ * [kotlin.time.Duration.Companion.seconds]).
+ */
+val Int.seconds: Duration
+  get() = toLong().seconds
+
+/**
+ * Returns a [Duration] of this many seconds (the [java.time.Duration] equivalent of
+ * [kotlin.time.Duration.Companion.seconds]).
+ */
+val Long.seconds: Duration
+  get() = Duration.ofSeconds(this)
+
 /** Returns the [Duration] between [other] and this [Instant]. */
 operator fun Instant.minus(other: Instant): Duration = Duration.between(other, this)
 

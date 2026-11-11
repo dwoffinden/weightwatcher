@@ -36,6 +36,16 @@ class TimestampsTest {
   }
 
   @Test
+  fun intSeconds_returnsDuration() {
+    assertThat(5.seconds).isEqualTo(Duration.ofSeconds(5))
+  }
+
+  @Test
+  fun longSeconds_returnsDuration() {
+    assertThat(5L.seconds).isEqualTo(Duration.ofSeconds(5))
+  }
+
+  @Test
   fun minus_returnsDurationBetweenInstants() {
     val earlier = Instant.parse("2026-01-01T10:00:00Z")
     val later = Instant.parse("2026-01-01T12:30:00Z")

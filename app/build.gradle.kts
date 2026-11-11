@@ -83,6 +83,7 @@ dependencies {
   testImplementation("com.google.truth:truth:1.4.5")
   testImplementation("com.google.truth.extensions:truth-liteproto-extension:1.4.5")
   testImplementation("org.robolectric:robolectric:4.17")
+  testImplementation("androidx.work:work-testing:2.12.0")
   testImplementation("androidx.compose.ui:ui-test-junit4")
   debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

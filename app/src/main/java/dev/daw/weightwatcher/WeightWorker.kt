@@ -44,7 +44,7 @@ constructor(
 
   companion object {
     private const val PERIODIC_WORK_NAME = "WeightPeriodicSync"
-    private const val ONE_TIME_WORK_NAME = "WeightOneTimeSync"
+    internal const val ONE_TIME_WORK_NAME = "WeightOneTimeSync"
     private const val KEY_EXTRA_DATA_TYPES = "extra_data_types"
 
     fun enqueuePeriodicWork(context: Context) {
