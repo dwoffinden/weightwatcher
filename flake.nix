@@ -81,6 +81,7 @@
           pre-commit-check = git-hooks.lib.${system}.run {
             src = ./.;
             hooks = {
+              keep-sorted.enable = true;
               yamlfmt = {
                 enable = true;
                 settings.lint-only = false;
@@ -126,6 +127,7 @@
               jdk
               (pkgs.gradle_9.override { java = jdk; })
               emulator-run
+              pkgs.keep-sorted
               pkgs.ktfmt
               pkgs.xmlformat
               flint.packages.${system}.default
