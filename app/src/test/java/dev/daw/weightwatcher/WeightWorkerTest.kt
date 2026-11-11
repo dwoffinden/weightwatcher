@@ -51,7 +51,7 @@ class WeightWorkerTest {
             serializer = ProtoSerializer(SyncSettings.getDefaultInstance()),
             produceFile = { file },
           ),
-        healthConnectClientProvider = { healthConnectClient },
+        healthConnectAccess = FakeHealthConnectAccess(healthConnectClient),
         widgetUpdater = {},
         activeDataTypesProvider = { setOf(DataType.WEIGHT) },
       )

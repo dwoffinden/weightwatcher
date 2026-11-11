@@ -31,7 +31,8 @@ An Android home screen widget that shows how long ago you last logged a type of 
         │   │   ├── WeightWatcherApplication.kt  # Hilt application; migrates widgets from older versions
         │   │   ├── PermissionsRationaleActivity.kt
         │   │   ├── AppModule.kt                 # Hilt bindings for DataStore and WorkManager
-        │   │   ├── HealthConnectModule.kt       # Hilt bindings for the Health Connect client
+        │   │   ├── HealthConnectAccess.kt       # Health Connect status and client, set up off the main thread
+        │   │   ├── HealthConnectModule.kt       # Hilt binding for HealthConnectAccess
         │   │   ├── ProtoSerializer.kt           # Generic DataStore serializer for Protobuf Lite messages
         │   │   ├── Theme.kt                     # Material 3 dynamic color theme
         │   │   └── timestamps.kt                # java.time.Instant <-> protobuf Timestamp conversions
@@ -45,6 +46,8 @@ An Android home screen widget that shows how long ago you last logged a type of 
             ├── WeightGlanceWidgetTest.kt        # Widget staleness and data type resolution
             ├── WeightGlanceWidgetStateTest.kt   # Robolectric tests for per-widget Glance state
             ├── WeightGlanceWidgetReceiverTest.kt
+            ├── WeightWorkerTest.kt              # Sync-running state from WorkManager
+            ├── FakeHealthConnectAccess.kt       # Test double for HealthConnectAccess
             ├── TimestampsTest.kt                # Instant/Timestamp conversion unit tests
             ├── testRecords.kt                   # Sample Health Connect records for tests
             └── testWidgets.kt                   # Robolectric widget and WorkManager helpers

@@ -41,11 +41,13 @@ class MainActivityTest {
   private val context: Context = ApplicationProvider.getApplicationContext()
   private val permissionController = FakePermissionController(grantAll = false)
 
-  @BindValue @HealthConnectSdkStatus var sdkStatus: Int = HealthConnectClient.SDK_UNAVAILABLE
+  private val fakeHealthConnectAccess =
+    FakeHealthConnectAccess(
+      FakeHealthConnectClient(permissionController = permissionController),
+      sdkStatus = HealthConnectClient.SDK_UNAVAILABLE,
+    )
 
-  @BindValue
-  val healthConnectClient: HealthConnectClient =
-    FakeHealthConnectClient(permissionController = permissionController)
+  @BindValue val healthConnectAccess: HealthConnectAccess = fakeHealthConnectAccess
 
   @Before
   fun setUp() {
@@ -54,7 +56,7 @@ class MainActivityTest {
 
   @Test
   fun sdkUnavailable_showsUnsupportedMessage() {
-    sdkStatus = HealthConnectClient.SDK_UNAVAILABLE
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_UNAVAILABLE
 
     ActivityScenario.launch(MainActivity::class.java).use {
       composeTestRule.onNodeWithText("WeightWatcher Widget Setup").assertIsDisplayed()
@@ -66,7 +68,7 @@ class MainActivityTest {
 
   @Test
   fun missingPermissions_showsGrantPermissionsPrompt() {
-    sdkStatus = HealthConnectClient.SDK_AVAILABLE
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
 
     ActivityScenario.launch(MainActivity::class.java).use {
       composeTestRule
@@ -79,7 +81,7 @@ class MainActivityTest {
 
   @Test
   fun permissionsGranted_showsPinPrompt() {
-    sdkStatus = HealthConnectClient.SDK_AVAILABLE
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
     permissionController.grantPermissions(DataType.WEIGHT.requiredPermissions)
 
     ActivityScenario.launch(MainActivity::class.java).use {
@@ -93,7 +95,7 @@ class MainActivityTest {
 
   @Test
   fun selectingTypeWithoutPermission_promptsForThatTypesPermission() {
-    sdkStatus = HealthConnectClient.SDK_AVAILABLE
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
     permissionController.grantPermissions(DataType.WEIGHT.requiredPermissions)
 
     ActivityScenario.launch(MainActivity::class.java).use {
@@ -107,7 +109,7 @@ class MainActivityTest {
 
   @Test
   fun configureMode_savingType_storesItOnWidgetAndReturnsOk() {
-    sdkStatus = HealthConnectClient.SDK_AVAILABLE
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
     permissionController.grantPermissions(DataType.STEPS.requiredPermissions)
     val appWidgetId: Int = placeWidget(context)
     val intent =

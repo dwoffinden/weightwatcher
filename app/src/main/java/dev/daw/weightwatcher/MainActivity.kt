@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -49,10 +50,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import javax.inject.Inject
-import javax.inject.Provider
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -61,10 +59,7 @@ class MainActivity : ComponentActivity() {
     const val EXTRA_DATA_TYPE = "dev.daw.weightwatcher.EXTRA_DATA_TYPE"
   }
 
-  @set:Inject
-  @setparam:HealthConnectSdkStatus
-  var sdkStatus: Int = HealthConnectClient.SDK_UNAVAILABLE
-  @field:Inject lateinit var healthConnectClientProvider: Provider<HealthConnectClient>
+  @field:Inject lateinit var healthConnectAccess: HealthConnectAccess
   @field:Inject lateinit var syncManager: SyncManager
 
   private val glanceAppWidget = WeightGlanceWidget()
@@ -97,7 +92,6 @@ class MainActivity : ComponentActivity() {
     configureWidgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID,
     initialDataType: DataType = DataType.WEIGHT,
   ) {
-    Log.i("MainActivity", "Health Connect SDK Status: $sdkStatus")
     val isConfigureMode: Boolean = configureWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
     var selectedDataType: DataType by remember { mutableStateOf(initialDataType) }
     var grantedPermissions: Set<String> by remember { mutableStateOf(emptySet()) }
@@ -107,6 +101,8 @@ class MainActivity : ComponentActivity() {
       remember(selectedDataType) { syncManager.lastRecordTime(selectedDataType) }
         .collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
+    // Null until loaded.
+    var sdkStatus: Int? by remember { mutableStateOf(null) }
 
     val requestPermissionActivityContract =
       PermissionController.createRequestPermissionResultContract()
@@ -121,6 +117,12 @@ class MainActivity : ComponentActivity() {
         }
       }
 
+    LaunchedEffect(Unit) {
+      val status: Int = healthConnectAccess.sdkStatus()
+      Log.i("MainActivity", "Health Connect SDK Status: $status")
+      sdkStatus = status
+    }
+
     LaunchedEffect(configureWidgetId) {
       if (isConfigureMode) {
         val manager = GlanceAppWidgetManager(this@MainActivity)
@@ -134,12 +136,10 @@ class MainActivity : ComponentActivity() {
       }
     }
 
-    LaunchedEffect(selectedDataType) {
+    LaunchedEffect(selectedDataType, sdkStatus) {
       if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
         val granted: Set<String> =
-          withContext(Dispatchers.IO) {
-            healthConnectClientProvider.get().permissionController.getGrantedPermissions()
-          }
+          healthConnectAccess.client().permissionController.getGrantedPermissions()
         grantedPermissions = granted
         val permitted: Boolean = granted.containsAll(selectedDataType.requiredPermissions)
         Log.i("MainActivity", "Permissions check for $selectedDataType: $permitted")
@@ -165,14 +165,17 @@ class MainActivity : ComponentActivity() {
           Text("WeightWatcher Widget Setup", style = MaterialTheme.typography.headlineMedium)
           Spacer(modifier = Modifier.height(24.dp))
 
-          if (sdkStatus != HealthConnectClient.SDK_AVAILABLE) {
+          val currentSdkStatus: Int? = sdkStatus
+          if (currentSdkStatus == null) {
+            CircularProgressIndicator()
+          } else if (currentSdkStatus != HealthConnectClient.SDK_AVAILABLE) {
             val errorMessage =
-              when (sdkStatus) {
+              when (currentSdkStatus) {
                 HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
                   "Health Connect is not installed. Please install it from the Play Store."
                 HealthConnectClient.SDK_UNAVAILABLE ->
                   "Health Connect is not supported on this device."
-                else -> "Health Connect status: $sdkStatus"
+                else -> "Health Connect status: $currentSdkStatus"
               }
             Text(errorMessage, color = MaterialTheme.colorScheme.error)
           } else {

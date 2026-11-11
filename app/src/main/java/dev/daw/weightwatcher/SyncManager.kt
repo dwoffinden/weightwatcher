@@ -22,7 +22,6 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import dev.daw.weightwatcher.DataTypeState.Status
 import java.time.Instant
 import javax.inject.Inject
-import javax.inject.Provider
 import javax.inject.Singleton
 import kotlin.comparisons.naturalOrder
 import kotlin.comparisons.nullsFirst
@@ -44,7 +43,7 @@ class SyncManager
 @Inject
 constructor(
   private val dataStore: DataStore<SyncSettings>,
-  private val healthConnectClientProvider: Provider<HealthConnectClient>,
+  private val healthConnectAccess: HealthConnectAccess,
   private val widgetUpdater: WidgetUpdater,
   private val activeDataTypesProvider: ActiveDataTypesProvider,
 ) {
@@ -79,8 +78,6 @@ constructor(
       }
   }
 
-  private val healthConnectClient: HealthConnectClient by lazy { healthConnectClientProvider.get() }
-
   fun lastRecordTime(dataType: DataType): Flow<Instant?> =
     dataStore.data.map { settings ->
       settings.statesByTypeMap[dataType.number]?.lastRecordTimeOrNull?.toInstant()
@@ -101,6 +98,7 @@ constructor(
       return Result.success(Unit)
     }
 
+    val healthConnectClient: HealthConnectClient = healthConnectAccess.client()
     val granted: Set<String> = healthConnectClient.permissionController.getGrantedPermissions()
     val hasBackgroundPermission: Boolean =
       HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND in granted
@@ -118,7 +116,7 @@ constructor(
     var firstFailure: Throwable? = null
     dataStore.updateData { settings ->
       val results: Map<DataType, DataTypeSyncResult> = permittedTypes.associateWith { type ->
-        syncDataType(type, settings.stateFor(type))
+        syncDataType(healthConnectClient, type, settings.stateFor(type))
       }
       firstFailure = results.values.firstNotNullOfOrNull { it.failure }
       settings.copy {
@@ -142,10 +140,14 @@ constructor(
   /**
    * Syncs [dataType] from [state], catching failures specific to it so that other types still sync.
    */
-  private suspend fun syncDataType(dataType: DataType, state: DataTypeState): DataTypeSyncResult {
+  private suspend fun syncDataType(
+    healthConnectClient: HealthConnectClient,
+    dataType: DataType,
+    state: DataTypeState,
+  ): DataTypeSyncResult {
     val nextState: DataTypeState? =
       try {
-        fetchNextDataTypeState(dataType, state)
+        fetchNextDataTypeState(healthConnectClient, dataType, state)
       } catch (e: CancellationException) {
         throw e
       } catch (e: SecurityException) {
@@ -174,6 +176,7 @@ constructor(
    * or returns `null` if the current changes token has expired.
    */
   private suspend fun fetchNextDataTypeState(
+    healthConnectClient: HealthConnectClient,
     dataType: DataType,
     state: DataTypeState,
   ): DataTypeState? {
