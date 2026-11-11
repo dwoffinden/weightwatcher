@@ -99,3 +99,74 @@ protobuf {
     }
   }
 }
+
+abstract class GenerateHealthPermissionsManifestTask : DefaultTask() {
+  @get:Input abstract val dataTypes: ListProperty<String>
+
+  @get:OutputFile abstract val outputManifest: RegularFileProperty
+
+  @TaskAction
+  fun generate() {
+    val permissions =
+      dataTypes.get().joinToString("\n") { type ->
+        """  <uses-permission android:name="android.permission.health.READ_$type" />"""
+      }
+    outputManifest
+      .get()
+      .asFile
+      .writeText(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+          "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n" +
+          "$permissions\n" +
+          "</manifest>\n"
+      )
+  }
+}
+
+val supportedDataTypes =
+  listOf(
+    // keep-sorted start
+    "ACTIVE_CALORIES_BURNED",
+    "ACTIVITY_INTENSITY",
+    "BLOOD_GLUCOSE",
+    "BLOOD_PRESSURE",
+    "BODY_FAT",
+    "DISTANCE",
+    "ELEVATION_GAINED",
+    "EXERCISE",
+    "FLOORS_CLIMBED",
+    "HEART_RATE",
+    "HEART_RATE_VARIABILITY",
+    "HEIGHT",
+    "HYDRATION",
+    "MINDFULNESS",
+    "NUTRITION",
+    "OXYGEN_SATURATION",
+    "RESPIRATORY_RATE",
+    "RESTING_HEART_RATE",
+    "SKIN_TEMPERATURE",
+    "SLEEP",
+    "STEPS",
+    "TOTAL_CALORIES_BURNED",
+    "VO2_MAX",
+    "WEIGHT",
+    // keep-sorted end
+  )
+
+androidComponents {
+  onVariants { variant ->
+    val taskName =
+      "generate${variant.name.replaceFirstChar { it.uppercase() }}HealthPermissionsManifest"
+    val generateManifestTask =
+      tasks.register<GenerateHealthPermissionsManifestTask>(taskName) {
+        dataTypes.set(supportedDataTypes)
+        outputManifest.set(
+          layout.buildDirectory.file("generated/manifests/$name/AndroidManifest.xml")
+        )
+      }
+    variant.sources.manifests.addGeneratedManifestFile(
+      generateManifestTask,
+      GenerateHealthPermissionsManifestTask::outputManifest,
+    )
+  }
+}

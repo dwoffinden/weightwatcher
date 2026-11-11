@@ -1,14 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
- <uses-permission android:name="android.permission.health.READ_WEIGHT" />
- <uses-permission android:name="android.permission.health.READ_STEPS" />
- <uses-permission android:name="android.permission.health.READ_SLEEP" />
- <uses-permission android:name="android.permission.health.READ_EXERCISE" />
- <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
- <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
- <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
- <uses-permission android:name="android.permission.health.READ_VO2_MAX" />
- <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
  <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
  <application
         android:name=".WeightWatcherApplication"

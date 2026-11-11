@@ -27,6 +27,21 @@ class DataTypesTest {
         DataType.BODY_FAT,
         DataType.VO2_MAX,
         DataType.BLOOD_PRESSURE,
+        DataType.HEART_RATE_VARIABILITY,
+        DataType.OXYGEN_SATURATION,
+        DataType.RESPIRATORY_RATE,
+        DataType.SKIN_TEMPERATURE,
+        DataType.DISTANCE,
+        DataType.ACTIVE_CALORIES_BURNED,
+        DataType.TOTAL_CALORIES_BURNED,
+        DataType.FLOORS_CLIMBED,
+        DataType.ELEVATION_GAINED,
+        DataType.ACTIVITY_INTENSITY,
+        DataType.HYDRATION,
+        DataType.NUTRITION,
+        DataType.BLOOD_GLUCOSE,
+        DataType.MINDFULNESS,
+        DataType.HEIGHT,
       )
   }
 
@@ -48,10 +63,10 @@ class DataTypesTest {
   }
 
   @Test
-  fun readPermission_supportedType_isHealthConnectReadPermission(
+  fun readPermission_supportedType_matchesEnumName(
     @TestParameter dataType: DataType = testValuesIn(SUPPORTED_DATA_TYPES)
   ) {
-    assertThat(dataType.readPermission).startsWith("android.permission.health.READ_")
+    assertThat(dataType.readPermission).isEqualTo("android.permission.health.READ_${dataType.name}")
   }
 
   @Test

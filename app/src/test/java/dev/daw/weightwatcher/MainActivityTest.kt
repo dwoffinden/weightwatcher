@@ -9,6 +9,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.testing.FakeHealthConnectClient
@@ -73,9 +74,10 @@ class MainActivityTest {
     ActivityScenario.launch(MainActivity::class.java).use {
       composeTestRule
         .onNodeWithText("Need Health Connect read permissions for weight.")
+        .performScrollTo()
         .assertIsDisplayed()
-      composeTestRule.onNodeWithText("Grant Permissions").assertIsDisplayed()
-      composeTestRule.onNodeWithText("Open Health Connect").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Grant Permissions").performScrollTo().assertIsDisplayed()
+      composeTestRule.onNodeWithText("Open Health Connect").performScrollTo().assertIsDisplayed()
     }
   }
 
@@ -85,11 +87,15 @@ class MainActivityTest {
     permissionController.grantPermissions(DataType.WEIGHT.requiredPermissions)
 
     ActivityScenario.launch(MainActivity::class.java).use {
-      composeTestRule.onNodeWithText("Permissions granted! 😊").assertIsDisplayed()
+      composeTestRule
+        .onNodeWithText("Permissions granted! 😊")
+        .performScrollTo()
+        .assertIsDisplayed()
       composeTestRule
         .onNodeWithText("You can now add the widget to your home screen.")
+        .performScrollTo()
         .assertIsDisplayed()
-      composeTestRule.onNodeWithText("Open Health Connect").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Open Health Connect").performScrollTo().assertIsDisplayed()
     }
   }
 
@@ -99,10 +105,11 @@ class MainActivityTest {
     permissionController.grantPermissions(DataType.WEIGHT.requiredPermissions)
 
     ActivityScenario.launch(MainActivity::class.java).use {
-      composeTestRule.onNodeWithText("Steps").performClick()
+      composeTestRule.onNodeWithText("Steps").performScrollTo().performClick()
 
       composeTestRule
         .onNodeWithText("Need Health Connect read permissions for steps.")
+        .performScrollTo()
         .assertIsDisplayed()
     }
   }
