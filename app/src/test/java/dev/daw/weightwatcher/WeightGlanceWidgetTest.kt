@@ -23,10 +23,10 @@ class WeightGlanceWidgetTest {
   @TestParameters("{staleness: '95h', expectedText: '3d'}")
   @TestParameters("{staleness: '96h', expectedText: '4d'}")
   @TestParameters("{staleness: '700h', expectedText: '29d'}")
-  fun formatStaleness_returnsHoursBelow72hAndDaysOtherwise(
-    staleness: Duration,
-    expectedText: String,
-  ) {
+  @TestParameters("{staleness: '8759h', expectedText: '364d'}")
+  @TestParameters("{staleness: '8760h', expectedText: '1y'}")
+  @TestParameters("{staleness: '17520h', expectedText: '2y'}")
+  fun formatStaleness_returnsHoursDaysOrYears(staleness: Duration, expectedText: String) {
     assertThat(WeightGlanceWidget.formatStaleness(staleness)).isEqualTo(expectedText)
   }
 

@@ -16,6 +16,16 @@ import org.junit.runner.RunWith
 class TimestampsTest {
 
   @Test
+  fun intDays_returnsDuration() {
+    assertThat(365.days).isEqualTo(Duration.ofDays(365))
+  }
+
+  @Test
+  fun longDays_returnsDuration() {
+    assertThat(365L.days).isEqualTo(Duration.ofDays(365))
+  }
+
+  @Test
   fun intHours_returnsDuration() {
     assertThat(20.hours).isEqualTo(Duration.ofHours(20))
   }

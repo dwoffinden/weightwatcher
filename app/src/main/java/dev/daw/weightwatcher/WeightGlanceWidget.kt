@@ -79,6 +79,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
   companion object {
     private val STALE_THRESHOLD: Duration = 20.hours
     private val DAYS_THRESHOLD: Duration = 72.hours
+    private val YEARS_THRESHOLD: Duration = 365.days
     val DATA_TYPE_PREF_KEY: Preferences.Key<Int> = intPreferencesKey("data_type")
     private val EXTRA_DATA_TYPE_KEY: ActionParameters.Key<Int> =
       ActionParameters.Key(MainActivity.EXTRA_DATA_TYPE)
@@ -86,7 +87,11 @@ class WeightGlanceWidget : GlanceAppWidget() {
       ActionParameters.Key(AppWidgetManager.EXTRA_APPWIDGET_ID)
 
     internal fun formatStaleness(staleness: Duration): String =
-      if (staleness < DAYS_THRESHOLD) "${staleness.toHours()}h" else "${staleness.toDays()}d"
+      when {
+        staleness < DAYS_THRESHOLD -> "${staleness.toHours()}h"
+        staleness < YEARS_THRESHOLD -> "${staleness.toDays()}d"
+        else -> "${staleness.toDays() / 365}y"
+      }
 
     /**
      * Returns whether to show a data type as syncing: while a sync runs, or until its first sync

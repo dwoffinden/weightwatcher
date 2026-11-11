@@ -6,6 +6,20 @@ import java.time.Duration
 import java.time.Instant
 
 /**
+ * Returns a [Duration] of this many days (the [java.time.Duration] equivalent of
+ * [kotlin.time.Duration.Companion.days]).
+ */
+val Int.days: Duration
+  get() = toLong().days
+
+/**
+ * Returns a [Duration] of this many days (the [java.time.Duration] equivalent of
+ * [kotlin.time.Duration.Companion.days]).
+ */
+val Long.days: Duration
+  get() = Duration.ofDays(this)
+
+/**
  * Returns a [Duration] of this many hours (the [java.time.Duration] equivalent of
  * [kotlin.time.Duration.Companion.hours]).
  */
