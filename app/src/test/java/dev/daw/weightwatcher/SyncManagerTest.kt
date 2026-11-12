@@ -113,11 +113,31 @@ class SyncManagerTest {
     }
 
   @Test
+  fun performSync_missingBackgroundPermission_marksTypeAsNoPermissions() =
+    runBlocking<Unit> {
+      permissionController.revokeAllPermissions()
+      permissionController.grantPermissions(setOf(DataType.WEIGHT.readPermission))
+      fakeClient.insertRecords(listOf(weightRecordAt(Instant.parse("2026-01-01T20:00:00Z"))))
+      val dataStore = createDataStore()
+      val syncManager = createSyncManager(dataStore)
+
+      val result: Result<Unit> = syncManager.performSync()
+
+      assertThat(result.isSuccess).isTrue()
+      assertThat(dataStore.data.first())
+        .isEqualTo(
+          syncSettingsWithStates(
+            DataType.WEIGHT to dataTypeState { status = Status.NO_PERMISSIONS }
+          )
+        )
+    }
+
+  @Test
   fun performSync_partialPermissions_syncsPermittedTypeAndMarksUnpermittedType() =
     runBlocking<Unit> {
       activeDataTypes = setOf(DataType.WEIGHT, DataType.STEPS)
       permissionController.revokeAllPermissions()
-      permissionController.grantPermissions(DataType.WEIGHT.requiredPermissions)
+      permissionController.grantPermissions(SyncManager.requiredPermissionsFor(DataType.WEIGHT))
       val weightTime = Instant.parse("2026-01-01T20:00:00Z")
       val stepsStart = Instant.parse("2026-01-01T18:00:00Z")
       val stepsEnd: Instant = stepsStart + 1.hours
@@ -167,7 +187,7 @@ class SyncManagerTest {
       syncManager.performSync()
       permissionController.revokeAllPermissions()
       syncManager.performSync()
-      permissionController.grantPermissions(DataType.WEIGHT.requiredPermissions)
+      permissionController.grantPermissions(SyncManager.requiredPermissionsFor(DataType.WEIGHT))
 
       val result: Result<Unit> = syncManager.performSync()
 

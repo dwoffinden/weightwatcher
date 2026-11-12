@@ -1,6 +1,5 @@
 package dev.daw.weightwatcher
 
-import androidx.health.connect.client.permission.HealthPermission
 import com.google.common.truth.Truth.assertThat
 import com.google.testing.junit.testparameterinjector.KotlinTestParameters.testValues
 import com.google.testing.junit.testparameterinjector.TestParameter
@@ -60,15 +59,6 @@ class DataTypeTest {
     val permissions: List<String> = DataType.entries.map { it.readPermission }
 
     assertThat(permissions).containsNoDuplicates()
-  }
-
-  @Test
-  fun requiredPermissions_addsBackgroundReadPermission(@TestParameter dataType: DataType) {
-    assertThat(dataType.requiredPermissions)
-      .containsExactly(
-        dataType.readPermission,
-        HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
-      )
   }
 
   @Test

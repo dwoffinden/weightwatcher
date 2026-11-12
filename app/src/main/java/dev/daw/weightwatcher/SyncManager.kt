@@ -64,6 +64,10 @@ constructor(
   private val activeDataTypesProvider: ActiveDataTypesProvider,
 ) {
   companion object {
+    /** Returns the Health Connect permissions needed to sync [dataType] in the background. */
+    fun requiredPermissionsFor(dataType: DataType): Set<String> =
+      setOf(dataType.readPermission, HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
+
     fun getLatestRecordTimeFromChanges(
       changes: List<Change>,
       recordClass: KClass<out Record>,
@@ -130,13 +134,9 @@ constructor(
 
     val healthConnectClient: HealthConnectClient = healthConnectAccess.client()
     val granted: Set<String> = healthConnectClient.permissionController.getGrantedPermissions()
-    val hasBackgroundPermission: Boolean =
-      HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND in granted
     val permittedTypes: Set<DataType> =
-      if (hasBackgroundPermission) {
-        typesToSync.filterTo(mutableSetOf()) { type -> type.readPermission in granted }
-      } else {
-        emptySet()
+      typesToSync.filterTo(mutableSetOf()) { type ->
+        granted.containsAll(requiredPermissionsFor(type))
       }
     val unpermittedTypes: Set<DataType> = typesToSync - permittedTypes
 

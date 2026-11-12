@@ -1,5 +1,6 @@
 package dev.daw.weightwatcher
 
+import androidx.health.connect.client.permission.HealthPermission
 import com.google.common.truth.Truth.assertThat
 import com.google.testing.junit.testparameterinjector.TestParameter
 import com.google.testing.junit.testparameterinjector.TestParameterInjector
@@ -7,12 +8,20 @@ import java.time.Instant
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Parameterised tests for [SyncManager.recordTime], kept apart from [SyncManagerTest] because that
- * uses the Robolectric runner, which can't be combined with [TestParameterInjector].
- */
+/** Pure-JVM parameterised tests for [SyncManager]'s companion helpers. */
 @RunWith(TestParameterInjector::class)
-class SyncManagerRecordTimeTest {
+class SyncManagerCompanionTest {
+
+  @Test
+  fun requiredPermissionsFor_includesTypeReadAndBackgroundReadPermissions(
+    @TestParameter dataType: DataType
+  ) {
+    assertThat(SyncManager.requiredPermissionsFor(dataType))
+      .containsExactly(
+        dataType.readPermission,
+        HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
+      )
+  }
 
   @Test
   fun recordTime_returnsInstantOrIntervalEnd(@TestParameter dataType: DataType) {

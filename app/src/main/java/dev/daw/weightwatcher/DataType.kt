@@ -161,7 +161,4 @@ enum class DataType(
 
   val readPermission: String
     get() = HealthPermission.getReadPermission(recordClass)
-
-  val requiredPermissions: Set<String>
-    get() = setOf(readPermission, HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
 }

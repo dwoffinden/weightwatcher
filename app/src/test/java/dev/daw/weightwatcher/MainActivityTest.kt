@@ -84,7 +84,7 @@ class MainActivityTest {
   @Test
   fun permissionsGranted_showsPinPrompt() {
     fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
-    permissionController.grantPermissions(DataType.WEIGHT.requiredPermissions)
+    permissionController.grantPermissions(SyncManager.requiredPermissionsFor(DataType.WEIGHT))
 
     ActivityScenario.launch(MainActivity::class.java).use {
       composeTestRule
@@ -102,7 +102,7 @@ class MainActivityTest {
   @Test
   fun selectingTypeWithoutPermission_promptsForThatTypesPermission() {
     fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
-    permissionController.grantPermissions(DataType.WEIGHT.requiredPermissions)
+    permissionController.grantPermissions(SyncManager.requiredPermissionsFor(DataType.WEIGHT))
 
     ActivityScenario.launch(MainActivity::class.java).use {
       composeTestRule.onNodeWithText("Steps").performScrollTo().performClick()
@@ -117,7 +117,7 @@ class MainActivityTest {
   @Test
   fun configureMode_selectingPermittedType_storesItOnWidgetAndReturnsOk() {
     fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
-    permissionController.grantPermissions(DataType.STEPS.requiredPermissions)
+    permissionController.grantPermissions(SyncManager.requiredPermissionsFor(DataType.STEPS))
     val appWidgetId: Int = placeWidget(context)
     val intent =
       Intent(context, MainActivity::class.java)

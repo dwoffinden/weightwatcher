@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
     var selectedDataType: DataType by remember { mutableStateOf(initialDataType) }
     var grantedPermissions: Set<String> by remember { mutableStateOf(emptySet()) }
     val hasPermissions: Boolean =
-      grantedPermissions.containsAll(selectedDataType.requiredPermissions)
+      grantedPermissions.containsAll(SyncManager.requiredPermissionsFor(selectedDataType))
     val lastRecordTime: Instant? by
       remember(selectedDataType) { syncManager.lastRecordTime(selectedDataType) }
         .collectAsState(initial = null)
@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
         Log.i("MainActivity", "Permissions request result: $granted")
         val updatedPermissions: Set<String> = grantedPermissions + granted
         grantedPermissions = updatedPermissions
-        if (updatedPermissions.containsAll(selectedDataType.requiredPermissions)) {
+        if (updatedPermissions.containsAll(SyncManager.requiredPermissionsFor(selectedDataType))) {
           Log.i("MainActivity", "Permissions granted for $selectedDataType!")
           if (isConfigureMode) {
             saveConfiguredWidgetAndFinish(selectedDataType)
@@ -194,7 +194,7 @@ class MainActivity : ComponentActivity() {
                     selectedDataType = dataType
                     if (
                       isConfigureMode &&
-                        grantedPermissions.containsAll(dataType.requiredPermissions)
+                        grantedPermissions.containsAll(SyncManager.requiredPermissionsFor(dataType))
                     ) {
                       saveConfiguredWidgetAndFinish(dataType)
                     }
@@ -262,7 +262,8 @@ class MainActivity : ComponentActivity() {
               Spacer(modifier = Modifier.height(16.dp))
               Button(
                 onClick = {
-                  val permissionsToRequest = selectedDataType.requiredPermissions
+                  val permissionsToRequest: Set<String> =
+                    SyncManager.requiredPermissionsFor(selectedDataType)
                   Log.i(
                     "MainActivity",
                     "Grant Permissions button clicked. Requesting: $permissionsToRequest",
