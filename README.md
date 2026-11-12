@@ -101,3 +101,5 @@ GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4096m" \
 ## License
 
 This project is licensed under the Mozilla Public License 2.0. See [`LICENSE`](LICENSE) for details.
+
+Icons in [`app/src/main/res/drawable/`](app/src/main/res/drawable/) are from [Material Symbols](https://fonts.google.com/icons) by Google, licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
