@@ -36,6 +36,7 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import dev.daw.weightwatcher.DataTypeState.Status
 import java.time.Instant
+import java.util.EnumMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.comparisons.naturalOrder
@@ -110,7 +111,7 @@ constructor(
 
   fun lastRecordTime(dataType: DataType): Flow<Instant?> =
     dataStore.data.map { settings ->
-      settings.statesByTypeMap[dataType.number]?.lastRecordTimeOrNull?.toInstant()
+      settings.stateFor(dataType)?.lastRecordTimeOrNull?.toInstant()
     }
 
   /**
@@ -144,18 +145,23 @@ constructor(
 
     var firstFailure: Throwable? = null
     dataStore.updateData { settings ->
-      val results: Map<DataType, DataTypeSyncResult> = permittedTypes.associateWith { type ->
-        syncDataType(healthConnectClient, type, settings.stateFor(type))
-      }
+      val states: EnumMap<DataType, DataTypeState> = settings.statesByType()
+      val results: Map<DataType, DataTypeSyncResult> =
+        permittedTypes.associateWithTo(emptyEnumMap()) { type ->
+          syncDataType(
+            healthConnectClient,
+            type,
+            states[type] ?: DataTypeState.getDefaultInstance(),
+          )
+        }
       firstFailure = results.values.firstNotNullOfOrNull { it.failure }
-      settings.copy {
-        for (type in unpermittedTypes) {
-          statesByType[type.number] = dataTypeState { status = Status.NO_PERMISSIONS }
-        }
-        for ((type, result) in results) {
-          statesByType[type.number] = result.state
-        }
+      for (type in unpermittedTypes) {
+        states[type] = dataTypeState { status = Status.NO_PERMISSIONS }
       }
+      for ((type, result) in results) {
+        states[type] = result.state
+      }
+      settings.copy { setStatesByType(states) }
     }
     widgetUpdater.updateWidgets()
 
@@ -260,7 +266,4 @@ constructor(
       status = Status.OK
     }
   }
-
-  private fun SyncSettings.stateFor(dataType: DataType): DataTypeState =
-    statesByTypeMap[dataType.number] ?: DataTypeState.getDefaultInstance()
 }

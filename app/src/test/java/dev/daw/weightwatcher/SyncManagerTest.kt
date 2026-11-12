@@ -106,9 +106,9 @@ class SyncManagerTest {
       assertThat(result.isSuccess).isTrue()
       assertThat(observedWidgetStates.last())
         .isEqualTo(
-          syncSettings {
-            statesByType[DataType.WEIGHT.number] = dataTypeState { status = Status.NO_PERMISSIONS }
-          }
+          syncSettingsWithStates(
+            DataType.WEIGHT to dataTypeState { status = Status.NO_PERMISSIONS }
+          )
         )
     }
 
@@ -141,18 +141,19 @@ class SyncManagerTest {
 
       assertThat(result.isSuccess).isTrue()
       val savedSettings: SyncSettings = dataStore.data.first()
-      val weightState: DataTypeState? = savedSettings.statesByTypeMap[DataType.WEIGHT.number]
+      val weightState: DataTypeState? = savedSettings.stateFor(DataType.WEIGHT)
       assertThat(weightState?.changesToken).isNotEmpty()
       assertThat(savedSettings)
         .isEqualTo(
-          syncSettings {
-            statesByType[DataType.WEIGHT.number] = dataTypeState {
-              changesToken = weightState?.changesToken.orEmpty()
-              lastRecordTime = weightTime.toTimestamp()
-              status = Status.OK
-            }
-            statesByType[DataType.STEPS.number] = dataTypeState { status = Status.NO_PERMISSIONS }
-          }
+          syncSettingsWithStates(
+            DataType.WEIGHT to
+              dataTypeState {
+                changesToken = weightState?.changesToken.orEmpty()
+                lastRecordTime = weightTime.toTimestamp()
+                status = Status.OK
+              },
+            DataType.STEPS to dataTypeState { status = Status.NO_PERMISSIONS },
+          )
         )
     }
 
@@ -172,17 +173,18 @@ class SyncManagerTest {
 
       assertThat(result.isSuccess).isTrue()
       val savedSettings: SyncSettings = dataStore.data.first()
-      val weightState: DataTypeState? = savedSettings.statesByTypeMap[DataType.WEIGHT.number]
+      val weightState: DataTypeState? = savedSettings.stateFor(DataType.WEIGHT)
       assertThat(weightState?.changesToken).isNotEmpty()
       assertThat(savedSettings)
         .isEqualTo(
-          syncSettings {
-            statesByType[DataType.WEIGHT.number] = dataTypeState {
-              changesToken = weightState?.changesToken.orEmpty()
-              lastRecordTime = recordTime.toTimestamp()
-              status = Status.OK
-            }
-          }
+          syncSettingsWithStates(
+            DataType.WEIGHT to
+              dataTypeState {
+                changesToken = weightState?.changesToken.orEmpty()
+                lastRecordTime = recordTime.toTimestamp()
+                status = Status.OK
+              }
+          )
         )
     }
 
@@ -198,17 +200,18 @@ class SyncManagerTest {
 
       assertThat(result.isSuccess).isTrue()
       val savedSettings: SyncSettings = dataStore.data.first()
-      val weightState: DataTypeState? = savedSettings.statesByTypeMap[DataType.WEIGHT.number]
+      val weightState: DataTypeState? = savedSettings.stateFor(DataType.WEIGHT)
       assertThat(weightState?.changesToken).isNotEmpty()
       assertThat(savedSettings)
         .isEqualTo(
-          syncSettings {
-            statesByType[DataType.WEIGHT.number] = dataTypeState {
-              changesToken = weightState?.changesToken.orEmpty()
-              lastRecordTime = recordTime.toTimestamp()
-              status = Status.OK
-            }
-          }
+          syncSettingsWithStates(
+            DataType.WEIGHT to
+              dataTypeState {
+                changesToken = weightState?.changesToken.orEmpty()
+                lastRecordTime = recordTime.toTimestamp()
+                status = Status.OK
+              }
+          )
         )
       assertThat(syncManager.lastRecordTime(DataType.WEIGHT).first()).isEqualTo(recordTime)
       assertThat(observedWidgetStates)
@@ -231,17 +234,18 @@ class SyncManagerTest {
 
       assertThat(result.isSuccess).isTrue()
       val savedSettings: SyncSettings = dataStore.data.first()
-      val weightState: DataTypeState? = savedSettings.statesByTypeMap[DataType.WEIGHT.number]
+      val weightState: DataTypeState? = savedSettings.stateFor(DataType.WEIGHT)
       assertThat(weightState?.changesToken).isNotEmpty()
       assertThat(savedSettings)
         .isEqualTo(
-          syncSettings {
-            statesByType[DataType.WEIGHT.number] = dataTypeState {
-              changesToken = weightState?.changesToken.orEmpty()
-              lastRecordTime = initialTime.toTimestamp()
-              status = Status.OK
-            }
-          }
+          syncSettingsWithStates(
+            DataType.WEIGHT to
+              dataTypeState {
+                changesToken = weightState?.changesToken.orEmpty()
+                lastRecordTime = initialTime.toTimestamp()
+                status = Status.OK
+              }
+          )
         )
     }
 
@@ -267,17 +271,18 @@ class SyncManagerTest {
 
       assertThat(result.isSuccess).isTrue()
       val savedSettings: SyncSettings = dataStore.data.first()
-      val weightState: DataTypeState? = savedSettings.statesByTypeMap[DataType.WEIGHT.number]
+      val weightState: DataTypeState? = savedSettings.stateFor(DataType.WEIGHT)
       assertThat(weightState?.changesToken).isNotEmpty()
       assertThat(savedSettings)
         .isEqualTo(
-          syncSettings {
-            statesByType[DataType.WEIGHT.number] = dataTypeState {
-              changesToken = weightState?.changesToken.orEmpty()
-              lastRecordTime = secondPageNewestTime.toTimestamp()
-              status = Status.OK
-            }
-          }
+          syncSettingsWithStates(
+            DataType.WEIGHT to
+              dataTypeState {
+                changesToken = weightState?.changesToken.orEmpty()
+                lastRecordTime = secondPageNewestTime.toTimestamp()
+                status = Status.OK
+              }
+          )
         )
     }
 
@@ -290,7 +295,7 @@ class SyncManagerTest {
       val syncManager = createSyncManager(dataStore)
       syncManager.performSync()
       val tokenToExpire: String =
-        dataStore.data.first().statesByTypeMap[DataType.WEIGHT.number]?.changesToken.orEmpty()
+        dataStore.data.first().stateFor(DataType.WEIGHT)?.changesToken.orEmpty()
       fakeClient.expireToken(tokenToExpire)
 
       val result: Result<Unit> = syncManager.performSync()
@@ -298,12 +303,13 @@ class SyncManagerTest {
       assertThat(result.isFailure).isTrue()
       assertThat(observedWidgetStates.last())
         .isEqualTo(
-          syncSettings {
-            statesByType[DataType.WEIGHT.number] = dataTypeState {
-              lastRecordTime = initialTime.toTimestamp()
-              status = Status.OK
-            }
-          }
+          syncSettingsWithStates(
+            DataType.WEIGHT to
+              dataTypeState {
+                lastRecordTime = initialTime.toTimestamp()
+                status = Status.OK
+              }
+          )
         )
     }
 
@@ -345,17 +351,18 @@ class SyncManagerTest {
 
       assertThat(result.exceptionOrNull()).isInstanceOf(IOException::class.java)
       val savedSettings: SyncSettings = dataStore.data.first()
-      val weightState: DataTypeState? = savedSettings.statesByTypeMap[DataType.WEIGHT.number]
+      val weightState: DataTypeState? = savedSettings.stateFor(DataType.WEIGHT)
       assertThat(savedSettings)
         .isEqualTo(
-          syncSettings {
-            statesByType[DataType.WEIGHT.number] = dataTypeState {
-              changesToken = weightState?.changesToken.orEmpty()
-              lastRecordTime = weightTime.toTimestamp()
-              status = Status.OK
-            }
-            statesByType[DataType.STEPS.number] = dataTypeState { status = Status.OK }
-          }
+          syncSettingsWithStates(
+            DataType.WEIGHT to
+              dataTypeState {
+                changesToken = weightState?.changesToken.orEmpty()
+                lastRecordTime = weightTime.toTimestamp()
+                status = Status.OK
+              },
+            DataType.STEPS to dataTypeState { status = Status.OK },
+          )
         )
     }
 
@@ -432,6 +439,11 @@ class SyncManagerTest {
       widgetUpdater = { observedWidgetStates += dataStore.data.first() },
       activeDataTypesProvider = { activeDataTypes },
     )
+
+  private fun syncSettingsWithStates(vararg entries: Pair<DataType, DataTypeState>): SyncSettings =
+    syncSettings {
+      setStatesByType(entries.toMap(emptyEnumMap()))
+    }
 
   private fun weightRecordAt(time: Instant): WeightRecord =
     WeightRecord(

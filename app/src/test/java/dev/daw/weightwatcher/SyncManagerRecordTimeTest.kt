@@ -1,7 +1,6 @@
 package dev.daw.weightwatcher
 
 import com.google.common.truth.Truth.assertThat
-import com.google.testing.junit.testparameterinjector.KotlinTestParameters.testValuesIn
 import com.google.testing.junit.testparameterinjector.TestParameter
 import com.google.testing.junit.testparameterinjector.TestParameterInjector
 import java.time.Instant
@@ -16,9 +15,7 @@ import org.junit.runner.RunWith
 class SyncManagerRecordTimeTest {
 
   @Test
-  fun recordTime_supportedType_returnsInstantOrIntervalEnd(
-    @TestParameter dataType: DataType = testValuesIn(SUPPORTED_DATA_TYPES)
-  ) {
+  fun recordTime_returnsInstantOrIntervalEnd(@TestParameter dataType: DataType) {
     val takenAt = Instant.parse("2026-01-01T10:00:00Z")
     val record = sampleRecordOf(dataType, takenAt)
 

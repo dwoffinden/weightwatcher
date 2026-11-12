@@ -55,10 +55,6 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-  companion object {
-    const val EXTRA_DATA_TYPE = "dev.daw.weightwatcher.EXTRA_DATA_TYPE"
-  }
-
   @field:Inject lateinit var healthConnectAccess: HealthConnectAccess
   @field:Inject lateinit var syncManager: SyncManager
 
@@ -78,8 +74,7 @@ class MainActivity : ComponentActivity() {
       )
     }
 
-    val initialDataType: DataType =
-      WeightGlanceWidget.resolveDataType(intent.getIntExtra(EXTRA_DATA_TYPE, 0)) ?: DataType.WEIGHT
+    val initialDataType: DataType = intent.getDataType() ?: DataType.WEIGHT
 
     setContent {
       WeightWatcherApp(configureWidgetId = configureWidgetId, initialDataType = initialDataType)
@@ -192,7 +187,7 @@ class MainActivity : ComponentActivity() {
               horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
               verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-              for (dataType in SUPPORTED_DATA_TYPES) {
+              for (dataType in DataType.entries) {
                 FilterChip(
                   selected = dataType == selectedDataType,
                   onClick = {

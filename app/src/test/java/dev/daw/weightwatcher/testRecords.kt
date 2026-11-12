@@ -237,7 +237,5 @@ fun sampleRecordOf(dataType: DataType, time: Instant): Record {
         height = Length.meters(1.75),
         metadata = Metadata.manualEntry(),
       )
-    DataType.DATA_TYPE_UNSPECIFIED,
-    DataType.UNRECOGNIZED -> throw IllegalArgumentException("Unsupported DataType: $dataType")
   }
 }

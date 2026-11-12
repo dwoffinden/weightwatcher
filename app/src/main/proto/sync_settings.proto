@@ -5,34 +5,6 @@ option java_package = "dev.daw.weightwatcher";
 
 import "google/protobuf/timestamp.proto";
 
-enum DataType {
-  DATA_TYPE_UNSPECIFIED = 0;
-  WEIGHT = 1;
-  STEPS = 2;
-  SLEEP = 3;
-  EXERCISE = 4;
-  HEART_RATE = 5;
-  RESTING_HEART_RATE = 6;
-  BODY_FAT = 7;
-  VO2_MAX = 8;
-  BLOOD_PRESSURE = 9;
-  HEART_RATE_VARIABILITY = 10;
-  OXYGEN_SATURATION = 11;
-  RESPIRATORY_RATE = 12;
-  SKIN_TEMPERATURE = 13;
-  DISTANCE = 14;
-  ACTIVE_CALORIES_BURNED = 15;
-  TOTAL_CALORIES_BURNED = 16;
-  FLOORS_CLIMBED = 17;
-  ELEVATION_GAINED = 18;
-  ACTIVITY_INTENSITY = 19;
-  HYDRATION = 20;
-  NUTRITION = 21;
-  BLOOD_GLUCOSE = 22;
-  MINDFULNESS = 23;
-  HEIGHT = 24;
-}
-
 message DataTypeState {
   // Whether a sync is running isn't stored: see WeightWorker.isSyncing.
   enum Status {
@@ -52,8 +24,41 @@ message DataTypeState {
 message SyncSettings {
   reserved 1, 2, 3;
 
-  // Keyed by DataType number, since map keys can't be enums.
-  map<int32, DataTypeState> states_by_type = 4;
+  enum DataType {
+    DATA_TYPE_UNSPECIFIED = 0;
+    WEIGHT = 1;
+    STEPS = 2;
+    SLEEP = 3;
+    EXERCISE = 4;
+    HEART_RATE = 5;
+    RESTING_HEART_RATE = 6;
+    BODY_FAT = 7;
+    VO2_MAX = 8;
+    BLOOD_PRESSURE = 9;
+    HEART_RATE_VARIABILITY = 10;
+    OXYGEN_SATURATION = 11;
+    RESPIRATORY_RATE = 12;
+    SKIN_TEMPERATURE = 13;
+    DISTANCE = 14;
+    ACTIVE_CALORIES_BURNED = 15;
+    TOTAL_CALORIES_BURNED = 16;
+    FLOORS_CLIMBED = 17;
+    ELEVATION_GAINED = 18;
+    ACTIVITY_INTENSITY = 19;
+    HYDRATION = 20;
+    NUTRITION = 21;
+    BLOOD_GLUCOSE = 22;
+    MINDFULNESS = 23;
+    HEIGHT = 24;
+  }
+
+  // Wire-compatible with map<int32, DataTypeState>, using the typed DataType enum as the key.
+  message StateEntry {
+    DataType key = 1;
+    DataTypeState value = 2;
+  }
+
+  repeated StateEntry states_by_type = 4;
 
   // Whether widgets placed before per-widget data types existed have been assigned WEIGHT.
   bool legacy_widgets_migrated = 5;

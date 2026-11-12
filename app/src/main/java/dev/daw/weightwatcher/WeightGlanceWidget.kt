@@ -11,8 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.preferencesOf
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -80,9 +78,6 @@ class WeightGlanceWidget : GlanceAppWidget() {
     private val STALE_THRESHOLD: Duration = 20.hours
     private val DAYS_THRESHOLD: Duration = 72.hours
     private val YEARS_THRESHOLD: Duration = 365.days
-    val DATA_TYPE_PREF_KEY: Preferences.Key<Int> = intPreferencesKey("data_type")
-    private val EXTRA_DATA_TYPE_KEY: ActionParameters.Key<Int> =
-      ActionParameters.Key(MainActivity.EXTRA_DATA_TYPE)
     private val EXTRA_APPWIDGET_ID_KEY: ActionParameters.Key<Int> =
       ActionParameters.Key(AppWidgetManager.EXTRA_APPWIDGET_ID)
 
@@ -100,23 +95,14 @@ class WeightGlanceWidget : GlanceAppWidget() {
     internal fun isSyncing(status: Status, isSyncRunning: Boolean): Boolean =
       isSyncRunning || status == Status.STATUS_UNSPECIFIED
 
-    /** Returns the supported [DataType] numbered [rawNumber], or `null` if there isn't one. */
-    internal fun resolveDataType(rawNumber: Int?): DataType? =
-      rawNumber?.let(DataType::forNumber)?.takeIf { it in SUPPORTED_DATA_TYPES }
-
-    fun previewPreferences(dataType: DataType): Preferences =
-      preferencesOf(DATA_TYPE_PREF_KEY to dataType.number)
+    fun previewPreferences(dataType: DataType): Preferences = dataTypePreferencesOf(dataType)
 
     /** Returns the widget's data type, or `null` if it hasn't been configured yet. */
-    suspend fun getWidgetDataType(context: Context, glanceId: GlanceId): DataType? {
-      val prefs = getAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId)
-      return resolveDataType(prefs[DATA_TYPE_PREF_KEY])
-    }
+    suspend fun getWidgetDataType(context: Context, glanceId: GlanceId): DataType? =
+      getAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId).getDataType()
 
     suspend fun setWidgetDataType(context: Context, glanceId: GlanceId, dataType: DataType) {
-      updateAppWidgetState(context, glanceId) { prefs ->
-        prefs[DATA_TYPE_PREF_KEY] = dataType.number
-      }
+      updateAppWidgetState(context, glanceId) { prefs -> prefs.setDataType(dataType) }
     }
 
     /** Returns the data types of all configured widgets. */
@@ -185,7 +171,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
     val appWidgetId: Int = GlanceAppWidgetManager(context).getAppWidgetId(id)
     provideContent {
       val prefs: Preferences = currentState()
-      val dataType: DataType? = resolveDataType(prefs[DATA_TYPE_PREF_KEY])
+      val dataType: DataType? = prefs.getDataType()
       val settings: SyncSettings by dataStore.data.collectAsState(initial = initialSettings)
       val isSyncRunning: Boolean by isSyncRunningFlow.collectAsState(initial = initialIsSyncRunning)
 
@@ -207,7 +193,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
           )
         } else {
           val typeState: DataTypeState =
-            settings.statesByTypeMap[dataType.number] ?: DataTypeState.getDefaultInstance()
+            settings.stateFor(dataType) ?: DataTypeState.getDefaultInstance()
           val lastRecordTime: Instant? = typeState.lastRecordTimeOrNull?.toInstant()
           val hasPermissions: Boolean = typeState.status != Status.NO_PERMISSIONS
           WidgetContent(
@@ -221,9 +207,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
               if (hasPermissions) {
                 actionRunCallback<RefreshCallback>()
               } else {
-                actionStartActivity<MainActivity>(
-                  actionParametersOf(EXTRA_DATA_TYPE_KEY to dataType.number)
-                )
+                actionStartActivity<MainActivity>(dataTypeActionParameters(dataType))
               },
           )
         }

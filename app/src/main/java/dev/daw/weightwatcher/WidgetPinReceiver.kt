@@ -24,16 +24,14 @@ class WidgetPinReceiver : BroadcastReceiver() {
      * with [AppWidgetManager.EXTRA_APPWIDGET_ID] once the widget is placed.
      */
     fun createSuccessCallback(context: Context, dataType: DataType): PendingIntent {
-      val intent =
-        Intent(context, WidgetPinReceiver::class.java)
-          .putExtra(MainActivity.EXTRA_DATA_TYPE, dataType.number)
+      val intent = Intent(context, WidgetPinReceiver::class.java).putDataType(dataType)
       // PendingIntents that differ only in extras are the same PendingIntent, so with
       // FLAG_UPDATE_CURRENT a pin request for one type would overwrite another type's pending
       // extras. A distinct request code per type keeps them separate.
       // FLAG_MUTABLE is needed so the launcher can add EXTRA_APPWIDGET_ID.
       return PendingIntent.getBroadcast(
         context,
-        /* requestCode= */ dataType.number,
+        /* requestCode= */ dataType.ordinal,
         intent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
       )
@@ -44,7 +42,7 @@ class WidgetPinReceiver : BroadcastReceiver() {
     val appWidgetId: Int =
       intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
     val dataType: DataType =
-      WeightGlanceWidget.resolveDataType(intent.getIntExtra(MainActivity.EXTRA_DATA_TYPE, 0))
+      intent.getDataType()
         ?: run {
           Log.w("WidgetPinReceiver", "Ignoring pin callback without a valid data type")
           return
