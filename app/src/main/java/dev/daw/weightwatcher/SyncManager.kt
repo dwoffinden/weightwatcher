@@ -33,6 +33,7 @@ import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
+import androidx.health.connect.client.response.ChangesResponse
 import androidx.health.connect.client.time.TimeRangeFilter
 import dev.daw.weightwatcher.DataTypeState.Status
 import java.time.Instant
@@ -215,55 +216,79 @@ constructor(
     dataType: DataType,
     state: DataTypeState,
   ): DataTypeState? {
-    val recordClass: KClass<out Record> = dataType.recordClass
     val existingToken: String? = state.changesToken.takeIf { it.isNotEmpty() }
-    var lastRecordTimeInstant: Instant? = state.lastRecordTimeOrNull?.toInstant()
-    val nextToken: String
-
-    if (existingToken == null) {
-      nextToken =
-        healthConnectClient.getChangesToken(ChangesTokenRequest(recordTypes = setOf(recordClass)))
-      val response =
-        healthConnectClient.readRecords(
-          ReadRecordsRequest(
-            recordClass,
-            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
-            ascendingOrder = false,
-            pageSize = 1,
-          )
-        )
-      if (response.records.isNotEmpty()) {
-        lastRecordTimeInstant = recordTime(response.records.single())
-        Log.i("SyncManager", "Initial load for $dataType found record at $lastRecordTimeInstant")
-      } else {
-        Log.i("SyncManager", "Initial load for $dataType found no records")
-      }
+    return if (existingToken == null) {
+      fetchInitialState(healthConnectClient, dataType, state)
     } else {
-      var currentToken: String = existingToken
-      do {
-        val changesResponse = healthConnectClient.getChanges(currentToken)
-        if (changesResponse.changesTokenExpired) {
-          return null
-        }
-
-        Log.i("SyncManager", "Fetched ${changesResponse.changes.size} changes for $dataType")
-
-        val latestFromChanges = getLatestRecordTimeFromChanges(changesResponse.changes, recordClass)
-        lastRecordTimeInstant =
-          maxOf(lastRecordTimeInstant, latestFromChanges, nullsFirst(naturalOrder()))
-        currentToken = changesResponse.nextChangesToken
-      } while (changesResponse.hasMore)
-      nextToken = currentToken
+      fetchDeltaState(healthConnectClient, dataType, state, existingToken)
     }
+  }
 
-    return state.copy {
-      changesToken = nextToken
-      if (lastRecordTimeInstant != null) {
-        lastRecordTime = lastRecordTimeInstant.toTimestamp()
+  private suspend fun fetchInitialState(
+    healthConnectClient: HealthConnectClient,
+    dataType: DataType,
+    state: DataTypeState,
+  ): DataTypeState {
+    val recordClass: KClass<out Record> = dataType.recordClass
+    val nextToken: String =
+      healthConnectClient.getChangesToken(ChangesTokenRequest(recordTypes = setOf(recordClass)))
+    val response =
+      healthConnectClient.readRecords(
+        ReadRecordsRequest(
+          recordClass,
+          timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+          ascendingOrder = false,
+          pageSize = 1,
+        )
+      )
+    val lastRecordTime: Instant? =
+      if (response.records.isEmpty()) {
+        Log.i("SyncManager", "Initial load for $dataType found no records")
+        state.lastRecordTimeOrNull?.toInstant()
       } else {
-        clearLastRecordTime()
+        val time: Instant = recordTime(response.records.single())
+        Log.i("SyncManager", "Initial load for $dataType found record at $time")
+        time
       }
-      status = Status.OK
+    return syncedState(state, nextToken, lastRecordTime)
+  }
+
+  private suspend fun fetchDeltaState(
+    healthConnectClient: HealthConnectClient,
+    dataType: DataType,
+    state: DataTypeState,
+    initialToken: String,
+  ): DataTypeState? {
+    val recordClass: KClass<out Record> = dataType.recordClass
+    var lastRecordTime: Instant? = state.lastRecordTimeOrNull?.toInstant()
+    var currentToken: String = initialToken
+    do {
+      val changesResponse: ChangesResponse = healthConnectClient.getChanges(currentToken)
+      if (changesResponse.changesTokenExpired) {
+        return null
+      }
+
+      Log.i("SyncManager", "Fetched ${changesResponse.changes.size} changes for $dataType")
+
+      val latestFromChanges: Instant? =
+        getLatestRecordTimeFromChanges(changesResponse.changes, recordClass)
+      lastRecordTime = maxOf(lastRecordTime, latestFromChanges, nullsFirst(naturalOrder()))
+      currentToken = changesResponse.nextChangesToken
+    } while (changesResponse.hasMore)
+    return syncedState(state, currentToken, lastRecordTime)
+  }
+
+  private fun syncedState(
+    state: DataTypeState,
+    nextToken: String,
+    lastRecordTimeInstant: Instant?,
+  ): DataTypeState = state.copy {
+    changesToken = nextToken
+    if (lastRecordTimeInstant != null) {
+      lastRecordTime = lastRecordTimeInstant.toTimestamp()
+    } else {
+      clearLastRecordTime()
     }
+    status = Status.OK
   }
 }
