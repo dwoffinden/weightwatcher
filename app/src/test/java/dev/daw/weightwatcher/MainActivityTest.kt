@@ -33,7 +33,7 @@ import org.robolectric.annotation.Config
 @HiltAndroidTest
 @UninstallModules(HealthConnectModule::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = HiltTestApplication::class)
+@Config(sdk = [34], qualifiers = "w412dp-h915dp", application = HiltTestApplication::class)
 class MainActivityTest {
 
   @get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
@@ -68,34 +68,29 @@ class MainActivityTest {
   }
 
   @Test
-  fun missingPermissions_showsGrantPermissionsPrompt() {
+  fun missingPermissions_showsGrantPermissionsPromptWithoutScrolling() {
     fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
 
     ActivityScenario.launch(MainActivity::class.java).use {
       composeTestRule
         .onNodeWithText("Need Health Connect read permissions for weight.")
-        .performScrollTo()
         .assertIsDisplayed()
-      composeTestRule.onNodeWithText("Grant Permissions").performScrollTo().assertIsDisplayed()
-      composeTestRule.onNodeWithText("Open Health Connect").performScrollTo().assertIsDisplayed()
+      composeTestRule.onNodeWithText("Grant Permissions").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Open Health Connect").assertIsDisplayed()
     }
   }
 
   @Test
-  fun permissionsGranted_showsPinPrompt() {
+  fun permissionsGranted_showsPinPromptWithoutScrolling() {
     fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
     permissionController.grantPermissions(SyncManager.requiredPermissionsFor(DataType.WEIGHT))
 
     ActivityScenario.launch(MainActivity::class.java).use {
-      composeTestRule
-        .onNodeWithText("Permissions granted! 😊")
-        .performScrollTo()
-        .assertIsDisplayed()
+      composeTestRule.onNodeWithText("Permissions granted! 😊").assertIsDisplayed()
       composeTestRule
         .onNodeWithText("You can now add the widget to your home screen.")
-        .performScrollTo()
         .assertIsDisplayed()
-      composeTestRule.onNodeWithText("Open Health Connect").performScrollTo().assertIsDisplayed()
+      composeTestRule.onNodeWithText("Open Health Connect").assertIsDisplayed()
     }
   }
 
@@ -109,8 +104,34 @@ class MainActivityTest {
 
       composeTestRule
         .onNodeWithText("Need Health Connect read permissions for steps.")
-        .performScrollTo()
         .assertIsDisplayed()
+    }
+  }
+
+  @Test
+  @Config(qualifiers = "w360dp-h600dp")
+  fun mediumHeightScreen_pinsButtonsWhileScrollingDataTypes() {
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
+
+    ActivityScenario.launch(MainActivity::class.java).use {
+      composeTestRule.onNodeWithText("Grant Permissions").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Open Health Connect").assertIsDisplayed()
+
+      composeTestRule.onNodeWithText("Weight").performScrollTo().assertIsDisplayed()
+
+      composeTestRule.onNodeWithText("Grant Permissions").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Open Health Connect").assertIsDisplayed()
+    }
+  }
+
+  @Test
+  @Config(qualifiers = "w640dp-h360dp")
+  fun shortScreen_scrollsEntireContent() {
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
+
+    ActivityScenario.launch(MainActivity::class.java).use {
+      composeTestRule.onNodeWithText("Active Calories").performScrollTo().assertIsDisplayed()
+      composeTestRule.onNodeWithText("Open Health Connect").performScrollTo().assertIsDisplayed()
     }
   }
 
@@ -127,7 +148,7 @@ class MainActivityTest {
     ActivityScenario.launchActivityForResult<MainActivity>(intent).use { scenario ->
       lateinit var activity: MainActivity
       scenario.onActivity { activity = it }
-      composeTestRule.onNodeWithText("Steps").performClick()
+      composeTestRule.onNodeWithText("Steps").performScrollTo().performClick()
 
       // Saving is asynchronous.
       composeTestRule.waitUntil(timeoutMillis = 5_000) { activity.isFinishing }
