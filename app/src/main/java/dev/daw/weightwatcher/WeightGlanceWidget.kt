@@ -77,6 +77,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
   }
 
   companion object {
+    private val HOURS_THRESHOLD: Duration = 1.hours
     private val STALE_THRESHOLD: Duration = 20.hours
     private val DAYS_THRESHOLD: Duration = 72.hours
     private val YEARS_THRESHOLD: Duration = 365.days
@@ -88,6 +89,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
 
     internal fun formatStaleness(staleness: Duration): String =
       when {
+        staleness < HOURS_THRESHOLD -> "${staleness.toMinutes()}m"
         staleness < DAYS_THRESHOLD -> "${staleness.toHours()}h"
         staleness < YEARS_THRESHOLD -> "${staleness.toDays()}d"
         else -> "${staleness.toDays() / 365}y"

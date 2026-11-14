@@ -15,8 +15,11 @@ import org.junit.runner.RunWith
 class WeightGlanceWidgetTest {
 
   @Test
-  @TestParameters("{staleness: '-5h', expectedText: '-5h'}")
-  @TestParameters("{staleness: '0h', expectedText: '0h'}")
+  @TestParameters("{staleness: '-5m', expectedText: '-5m'}")
+  @TestParameters("{staleness: '0m', expectedText: '0m'}")
+  @TestParameters("{staleness: '59m', expectedText: '59m'}")
+  @TestParameters("{staleness: '60m', expectedText: '1h'}")
+  @TestParameters("{staleness: '89m', expectedText: '1h'}")
   @TestParameters("{staleness: '20h', expectedText: '20h'}")
   @TestParameters("{staleness: '71h', expectedText: '71h'}")
   @TestParameters("{staleness: '72h', expectedText: '3d'}")
@@ -26,7 +29,7 @@ class WeightGlanceWidgetTest {
   @TestParameters("{staleness: '8759h', expectedText: '364d'}")
   @TestParameters("{staleness: '8760h', expectedText: '1y'}")
   @TestParameters("{staleness: '17520h', expectedText: '2y'}")
-  fun formatStaleness_returnsHoursDaysOrYears(staleness: Duration, expectedText: String) {
+  fun formatStaleness_returnsMinutesHoursDaysOrYears(staleness: Duration, expectedText: String) {
     assertThat(WeightGlanceWidget.formatStaleness(staleness)).isEqualTo(expectedText)
   }
 
