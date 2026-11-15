@@ -97,6 +97,13 @@
                 entry = "${pkgs.xmlformat}/bin/xmlformat -i";
                 files = "\\.xml$";
               };
+              buf-format = {
+                enable = true;
+                name = "buf-format";
+                entry = "${pkgs.buf}/bin/buf format -w app/src/main/proto";
+                files = "\\.proto$";
+                pass_filenames = false;
+              };
               flint = {
                 enable = true;
                 name = "flint";
@@ -128,6 +135,7 @@
               emulator-run
               pkgs.ktfmt
               pkgs.xmlformat
+              pkgs.buf
               flint.packages.${system}.default
               pkgs.kotlin-language-server
             ];

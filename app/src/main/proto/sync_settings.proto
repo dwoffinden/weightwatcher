@@ -2,9 +2,9 @@ edition = "2024";
 
 package dev.daw.weightwatcher;
 
-option features.field_presence = IMPLICIT;
-
 import "google/protobuf/timestamp.proto";
+
+option features.field_presence = IMPLICIT;
 
 enum DataType {
   DATA_TYPE_UNSPECIFIED = 0;
