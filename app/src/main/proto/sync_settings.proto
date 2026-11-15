@@ -1,7 +1,8 @@
 edition = "2024";
 
+package dev.daw.weightwatcher;
+
 option features.field_presence = IMPLICIT;
-option java_package = "dev.daw.weightwatcher";
 
 import "google/protobuf/timestamp.proto";
 
