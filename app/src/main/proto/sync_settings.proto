@@ -1,9 +1,10 @@
 edition = "2024";
 
-option features.field_presence = IMPLICIT;
-option java_package = "dev.daw.weightwatcher";
+package dev.daw.weightwatcher;
 
 import "google/protobuf/timestamp.proto";
+
+option features.field_presence = IMPLICIT;
 
 message DataTypeState {
   // Whether a sync is running isn't stored: see WeightWorker.isSyncing.
