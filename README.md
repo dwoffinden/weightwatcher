@@ -4,7 +4,7 @@ An Android home screen widget that shows how long ago you last logged a type of 
 
 ## Features
 
-- **1x1 Home Screen Widget**: Shows the data type's icon and the time since its last record (in minutes, hours after 1 hour, days after 72 hours, or years after 365 days). The icon is in the theme's primary colour up to 20 hours, and in the error colour after that.
+- **1x1 Home Screen Widget**: Shows the data type's icon and the time since its last record (in minutes, hours after 1 hour, days after 72 hours, or years after 365 days), updating live while the app is asleep via `RemoteCompose` (`RemoteViews.DrawInstructions`) on Android 16+ and `<Chronometer>` (under 1 hour) on Android 14–15. The icon is in the theme's primary colour up to 20 hours, and in the error colour after that.
 - **Multiple Data Types**: Each widget tracks one data type, picked when adding the widget (from the launcher or via the app's pin button) and changeable later by reconfiguring it. Read permission is requested per data type.
 - **Incremental Sync**: Polls the Health Connect [Changelog API](https://developer.android.com/reference/kotlin/androidx/health/connect/client/HealthConnectClient#getChanges(kotlin.String)) every 30 minutes via `WorkManager`, with a separate changes token per data type.
 - **Tap to Refresh**: Tapping the widget triggers an immediate sync (or opens the permission setup screen if permissions are missing).
@@ -22,10 +22,15 @@ An Android home screen widget that shows how long ago you last logged a type of 
         │   ├── AndroidManifest.xml
         │   ├── java/dev/daw/weightwatcher/
         │   │   ├── MainActivity.kt              # Compose UI for picking a data type, requesting permissions, and pinning/configuring widgets
-        │   │   ├── dataTypes.kt                 # Supported data types: record classes, names, icons and permissions
-        │   │   ├── WeightGlanceWidget.kt        # Jetpack Glance widget UI and per-widget data type state
+        │   │   ├── DataType.kt                  # Supported data types: record classes, names, icons and permissions
+        │   │   ├── WeightGlanceWidget.kt        # Widget coordinator, per-widget data type state, and SDK-level backend routing
         │   │   ├── WeightGlanceWidgetReceiver.kt
         │   │   ├── WidgetPinReceiver.kt         # Stores the data type of a widget pinned from the app
+        │   │   ├── widgetDataType.kt            # Per-widget Preferences/Intent/ActionParameters data type encoding
+        │   │   ├── widget/
+        │   │   │   ├── WidgetState.kt           # Shared widget display and click-action state machine
+        │   │   │   ├── glance/                  # Android 14–15 Jetpack Glance + <Chronometer> widget backend
+        │   │   │   └── remotecompose/           # Android 16+ standalone RemoteCompose (DrawInstructions) widget backend
         │   │   ├── SyncManager.kt               # Health Connect queries and Proto DataStore persistence
         │   │   ├── WeightWorker.kt              # WorkManager CoroutineWorker for periodic/one-off syncs
         │   │   ├── WeightWatcherApplication.kt  # Hilt application; migrates widgets from older versions

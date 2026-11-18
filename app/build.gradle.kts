@@ -37,11 +37,20 @@ android {
     targetCompatibility = JavaVersion.VERSION_25
   }
 
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      // Robolectric's FileDescriptorInterceptor reflects on jdk.internal.access.SharedSecrets when
+      // ApplicationSharedMemory initializes on SDK 36+
+      // (https://github.com/robolectric/robolectric/issues/11434).
+      all { it.jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED") }
+    }
+  }
 }
 
 dependencies {
   implementation("androidx.core:core-ktx:1.19.1")
+  implementation("com.google.guava:guava:33.8.0-android")
 
   // Compose
   implementation("androidx.activity:activity-compose:1.13.0")
@@ -49,6 +58,12 @@ dependencies {
   implementation("androidx.compose.ui:ui")
   implementation("androidx.compose.material3:material3")
   implementation("androidx.compose.ui:ui-tooling-preview")
+
+  // RemoteCompose
+  implementation("androidx.compose.remote:remote-creation:1.0.0-alpha23")
+  implementation("androidx.compose.remote:remote-creation-compose:1.0.0-alpha23")
+  implementation("androidx.compose.remote:remote-creation-core:1.0.0-alpha23")
+  implementation("androidx.compose.remote.foundation:foundation:1.0.0-alpha06")
 
   // Health Connect
   implementation("androidx.health.connect:connect-client:1.2.0-alpha06")
@@ -83,6 +98,7 @@ dependencies {
   testImplementation("com.google.truth:truth:1.4.5")
   testImplementation("com.google.truth.extensions:truth-liteproto-extension:1.4.5")
   testImplementation("org.robolectric:robolectric:4.17")
+  testImplementation("androidx.compose.remote:remote-player-core:1.0.0-alpha23")
   testImplementation("androidx.work:work-testing:2.12.0")
   testImplementation("androidx.compose.ui:ui-test-junit4")
   debugImplementation("androidx.compose.ui:ui-test-manifest")

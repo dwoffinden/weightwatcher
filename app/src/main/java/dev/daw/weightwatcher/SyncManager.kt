@@ -44,11 +44,13 @@ import kotlin.comparisons.naturalOrder
 import kotlin.comparisons.nullsFirst
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.reflect.KClass
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 fun interface WidgetUpdater {
-  suspend fun updateWidgets()
+  suspend fun updateWidgets(isSyncRunning: Boolean)
 }
 
 fun interface ActiveDataTypesProvider {
@@ -133,38 +135,41 @@ constructor(
       return Result.success(Unit)
     }
 
-    val healthConnectClient: HealthConnectClient = healthConnectAccess.client()
-    val granted: Set<String> = healthConnectClient.permissionController.getGrantedPermissions()
-    val permittedTypes: Set<DataType> =
-      typesToSync.filterTo(mutableSetOf()) { type ->
-        granted.containsAll(requiredPermissionsFor(type))
-      }
-    val unpermittedTypes: Set<DataType> = typesToSync - permittedTypes
-
     // Lets widgets show that a sync is running (see WeightWorker.isSyncing).
-    widgetUpdater.updateWidgets()
+    widgetUpdater.updateWidgets(isSyncRunning = true)
 
     var firstFailure: Throwable? = null
-    dataStore.updateData { settings ->
-      val states: EnumMap<DataType, DataTypeState> = settings.statesByType()
-      val results: Map<DataType, DataTypeSyncResult> =
-        permittedTypes.associateWithTo(emptyEnumMap()) { type ->
-          syncDataType(
-            healthConnectClient,
-            type,
-            states[type] ?: DataTypeState.getDefaultInstance(),
-          )
+    try {
+      val healthConnectClient: HealthConnectClient = healthConnectAccess.client()
+      val granted: Set<String> = healthConnectClient.permissionController.getGrantedPermissions()
+      val permittedTypes: Set<DataType> =
+        typesToSync.filterTo(mutableSetOf()) { type ->
+          granted.containsAll(requiredPermissionsFor(type))
         }
-      firstFailure = results.values.firstNotNullOfOrNull { it.failure }
-      for (type in unpermittedTypes) {
-        states[type] = dataTypeState { status = Status.NO_PERMISSIONS }
+      val unpermittedTypes: Set<DataType> = typesToSync - permittedTypes
+
+      dataStore.updateData { settings ->
+        val states: EnumMap<DataType, DataTypeState> = settings.statesByType()
+        val results: Map<DataType, DataTypeSyncResult> =
+          permittedTypes.associateWithTo(emptyEnumMap()) { type ->
+            syncDataType(
+              healthConnectClient,
+              type,
+              states[type] ?: DataTypeState.getDefaultInstance(),
+            )
+          }
+        firstFailure = results.values.firstNotNullOfOrNull { it.failure }
+        for (type in unpermittedTypes) {
+          states[type] = dataTypeState { status = Status.NO_PERMISSIONS }
+        }
+        for ((type, result) in results) {
+          states[type] = result.state
+        }
+        settings.copy { setStatesByType(states) }
       }
-      for ((type, result) in results) {
-        states[type] = result.state
-      }
-      settings.copy { setStatesByType(states) }
+    } finally {
+      withContext(NonCancellable) { widgetUpdater.updateWidgets(isSyncRunning = false) }
     }
-    widgetUpdater.updateWidgets()
 
     val failure: Throwable? = firstFailure
     return if (failure != null) Result.failure(failure) else Result.success(Unit)

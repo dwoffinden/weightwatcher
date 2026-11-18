@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.dataStoreFile
-import androidx.glance.appwidget.updateAll
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -27,9 +26,10 @@ object AppModule {
   @Provides fun provideClock(): AppClock = AppClock.system()
 
   @Provides
-  fun provideWidgetUpdater(@ApplicationContext context: Context): WidgetUpdater = WidgetUpdater {
-    WeightGlanceWidget().updateAll(context)
-  }
+  fun provideWidgetUpdater(@ApplicationContext context: Context): WidgetUpdater =
+    WidgetUpdater { isSyncRunning ->
+      WeightGlanceWidget().updateAllWidgets(context, isSyncRunning = isSyncRunning)
+    }
 
   @Provides
   fun provideActiveDataTypesProvider(

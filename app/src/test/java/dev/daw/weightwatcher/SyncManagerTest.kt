@@ -456,7 +456,7 @@ class SyncManagerTest {
     SyncManager(
       dataStore = dataStore,
       healthConnectAccess = FakeHealthConnectAccess(client),
-      widgetUpdater = { observedWidgetStates += dataStore.data.first() },
+      widgetUpdater = { _ -> observedWidgetStates += dataStore.data.first() },
       activeDataTypesProvider = { activeDataTypes },
     )
 
