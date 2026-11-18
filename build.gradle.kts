@@ -4,6 +4,7 @@ plugins {
   id("com.google.devtools.ksp") version "2.3.13" apply false
   id("com.google.dagger.hilt.android") version "2.60.1" apply false
   id("com.google.protobuf") version "0.10.1" apply false
+  id("io.github.takahirom.roborazzi") version "1.79.0" apply false
 }
 
 buildscript {

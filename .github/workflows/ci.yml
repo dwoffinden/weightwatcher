@@ -25,8 +25,8 @@ jobs:
           gc-max-store-size-linux: 2G
       - name: Gradle Cache
         uses: burrunan/gradle-cache-action@404534c34a2faa40430357a3183522a845b04f3b # v3.0.3
-      - name: Run unit tests and build debug APK
-        run: nix develop .#ci --command gradle test assembleDebug
+      - name: Run unit tests, verify screenshots, and build debug APK
+        run: nix develop .#ci --command gradle verifyRoborazziDebug test assembleDebug
       - name: Upload debug APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

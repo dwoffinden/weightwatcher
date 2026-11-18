@@ -4,6 +4,7 @@ plugins {
   id("com.google.devtools.ksp")
   id("com.google.dagger.hilt.android")
   id("com.google.protobuf")
+  id("io.github.takahirom.roborazzi")
 }
 
 val widgetRenderer: String = providers.gradleProperty("widgetRenderer").orNull ?: "auto"
@@ -58,6 +59,8 @@ android {
   }
 }
 
+roborazzi { outputDir.set(file("src/test/snapshots")) }
+
 dependencies {
   implementation("androidx.core:core-ktx:1.19.1")
   implementation("com.google.guava:guava:33.8.0-android")
@@ -108,6 +111,8 @@ dependencies {
   testImplementation("com.google.truth:truth:1.4.5")
   testImplementation("com.google.truth.extensions:truth-liteproto-extension:1.4.5")
   testImplementation("org.robolectric:robolectric:4.17")
+  testImplementation("io.github.takahirom.roborazzi:roborazzi:1.79.0")
+  testImplementation("io.github.takahirom.roborazzi:roborazzi-junit-rule:1.79.0")
   testImplementation("androidx.compose.remote:remote-player-core:1.0.0-alpha23")
   testImplementation("androidx.work:work-testing:2.12.0")
   testImplementation("androidx.compose.ui:ui-test-junit4")
