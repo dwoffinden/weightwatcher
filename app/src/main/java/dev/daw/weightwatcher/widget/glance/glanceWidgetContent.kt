@@ -94,7 +94,7 @@ internal suspend fun GlanceAppWidget.provideGlanceWidgetContent(
 }
 
 @Composable
-private fun GlanceWidgetContent(
+internal fun GlanceWidgetContent(
   context: Context,
   state: WidgetState,
   clock: AppClock,

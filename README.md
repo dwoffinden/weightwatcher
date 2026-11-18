@@ -67,18 +67,23 @@ While building outside Nix isn't officially supported, any recent Gradle 9 insta
 ### Common Gradle Commands
 
 ```bash
-# Run unit tests
-gradle test
-
-# Build debug or release APKs
-gradle assembleDebug
-gradle assembleRelease
+# Run unit tests and verify Roborazzi widget screenshot goldens (app/src/test/snapshots/)
+gradle test verifyRoborazziDebug
 
 # Install the debug build onto a connected device or running emulator
 gradle installDebug
 
-# To install only to the main profile (skipping work profiles on devices with multiple users):
-adb install --user 0 app/build/outputs/apk/debug/app-debug.apk
+# Build a release APK, or install only to the main profile (skipping work profiles)
+gradle assembleRelease
+adb install --user 0 app/build/outputs/apk/release/app-release.apk
+
+# Force the Glance + Chronometer fallback even on Android 16+ (R8 strips RemoteCompose in release)
+gradle assembleDebug -PwidgetRenderer=glance
+gradle assembleRelease -PwidgetRenderer=glance
+
+# Update Roborazzi widget screenshot goldens and preview them in a grid in Kitty (works over SSH)
+gradle recordRoborazziDebug
+./scripts/show_snapshots.sh
 ```
 
 Build outputs are written to:
