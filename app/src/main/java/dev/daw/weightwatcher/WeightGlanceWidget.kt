@@ -3,56 +3,22 @@ package dev.daw.weightwatcher
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
-import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
-import androidx.glance.Image
-import androidx.glance.ImageProvider
-import androidx.glance.action.Action
-import androidx.glance.action.ActionParameters
-import androidx.glance.action.actionParametersOf
-import androidx.glance.action.actionStartActivity
-import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.action.ActionCallback
-import androidx.glance.appwidget.action.actionRunCallback
-import androidx.glance.appwidget.appWidgetBackground
-import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
-import androidx.glance.background
-import androidx.glance.color.ColorProvider
-import androidx.glance.currentState
-import androidx.glance.layout.Alignment
-import androidx.glance.layout.Column
-import androidx.glance.layout.Spacer
-import androidx.glance.layout.fillMaxSize
-import androidx.glance.layout.height
-import androidx.glance.layout.padding
-import androidx.glance.layout.size
 import androidx.glance.state.PreferencesGlanceStateDefinition
-import androidx.glance.text.FontWeight
-import androidx.glance.text.Text
-import androidx.glance.text.TextStyle
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import dev.daw.weightwatcher.DataTypeState.Status
+import dev.daw.weightwatcher.widget.glance.provideGlanceWidgetContent
 import java.time.Duration
-import java.time.Instant
 import java.time.InstantSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -75,12 +41,10 @@ class WeightGlanceWidget : GlanceAppWidget() {
   }
 
   companion object {
-    private val HOURS_THRESHOLD: Duration = 1.hours
-    private val STALE_THRESHOLD: Duration = 20.hours
-    private val DAYS_THRESHOLD: Duration = 72.hours
-    private val YEARS_THRESHOLD: Duration = 365.days
-    private val EXTRA_APPWIDGET_ID_KEY: ActionParameters.Key<Int> =
-      ActionParameters.Key(AppWidgetManager.EXTRA_APPWIDGET_ID)
+    internal val HOURS_THRESHOLD: Duration = 1.hours
+    internal val STALE_THRESHOLD: Duration = 20.hours
+    internal val DAYS_THRESHOLD: Duration = 72.hours
+    internal val YEARS_THRESHOLD: Duration = 365.days
 
     internal fun formatStaleness(staleness: Duration): String =
       when {
@@ -167,128 +131,17 @@ class WeightGlanceWidget : GlanceAppWidget() {
     val dependencies: Dependencies = EntryPointAccessors.fromApplication(context)
     val dataStore: DataStore<SyncSettings> = dependencies.syncSettingsDataStore()
     val clock: InstantSource = dependencies.clock()
-    val initialSettings: SyncSettings = dataStore.data.first()
     val isSyncRunningFlow: Flow<Boolean> = WeightWorker.isSyncing(context)
-    val initialIsSyncRunning: Boolean = isSyncRunningFlow.first()
-    val appWidgetId: Int = GlanceAppWidgetManager(context).getAppWidgetId(id)
-    provideContent {
-      val prefs: Preferences = currentState()
-      val dataType: DataType? = prefs.getDataType()
-      val settings: SyncSettings by dataStore.data.collectAsState(initial = initialSettings)
-      val isSyncRunning: Boolean by isSyncRunningFlow.collectAsState(initial = initialIsSyncRunning)
+    val appWidgetId: Int =
+      runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }
+        .getOrDefault(AppWidgetManager.INVALID_APPWIDGET_ID)
 
-      GlanceTheme {
-        if (dataType == null) {
-          // A freshly pinned widget is drawn before its data type arrives; show it as syncing
-          // rather than guessing. Tapping opens the picker in case the type never arrives.
-          WidgetContent(
-            context = context,
-            iconRes = R.drawable.ic_sync,
-            contentDescription = "Setting up",
-            staleness = null,
-            hasPermissions = true,
-            isSyncing = true,
-            onClick =
-              actionStartActivity<MainActivity>(
-                actionParametersOf(EXTRA_APPWIDGET_ID_KEY to appWidgetId)
-              ),
-          )
-        } else {
-          val typeState: DataTypeState =
-            settings.stateFor(dataType) ?: DataTypeState.getDefaultInstance()
-          val lastRecordTime: Instant? = typeState.lastRecordTimeOrNull?.toInstant()
-          val hasPermissions: Boolean = typeState.status != Status.NO_PERMISSIONS
-          WidgetContent(
-            context = context,
-            iconRes = dataType.iconRes,
-            contentDescription = dataType.displayName,
-            staleness = if (lastRecordTime != null) clock.instant() - lastRecordTime else null,
-            hasPermissions = hasPermissions,
-            isSyncing = isSyncing(typeState.status, isSyncRunning),
-            onClick =
-              if (hasPermissions) {
-                actionRunCallback<RefreshCallback>()
-              } else {
-                actionStartActivity<MainActivity>(dataTypeActionParameters(dataType))
-              },
-          )
-        }
-      }
-    }
-  }
-
-  @Composable
-  private fun WidgetContent(
-    context: Context,
-    iconRes: Int,
-    contentDescription: String,
-    staleness: Duration?,
-    hasPermissions: Boolean,
-    isSyncing: Boolean,
-    onClick: Action,
-  ) {
-    val backgroundColor =
-      ColorProvider(
-        day = dynamicLightColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
-        night = dynamicDarkColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
-      )
-
-    Column(
-      modifier =
-        GlanceModifier.fillMaxSize()
-          .appWidgetBackground()
-          .cornerRadius(android.R.dimen.system_app_widget_background_radius)
-          .background(backgroundColor)
-          .padding(8.dp)
-          .clickable(onClick),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-      val shownIconRes =
-        when {
-          isSyncing -> R.drawable.ic_sync
-          !hasPermissions -> R.drawable.ic_warning
-          else -> iconRes
-        }
-
-      val iconTint =
-        when {
-          isSyncing -> GlanceTheme.colors.onSurfaceVariant
-          !hasPermissions -> GlanceTheme.colors.error
-          staleness == null -> GlanceTheme.colors.onSurfaceVariant
-          staleness > STALE_THRESHOLD -> GlanceTheme.colors.error
-          else -> GlanceTheme.colors.primary
-        }
-
-      val text =
-        when {
-          isSyncing -> "Sync..."
-          !hasPermissions -> "Auth"
-          staleness == null -> "None"
-          else -> formatStaleness(staleness)
-        }
-
-      Image(
-        provider = ImageProvider(shownIconRes),
-        contentDescription = contentDescription,
-        colorFilter = ColorFilter.tint(iconTint),
-        modifier = GlanceModifier.size(32.dp),
-      )
-      Spacer(modifier = GlanceModifier.height(4.dp))
-      Text(
-        text = text,
-        style = TextStyle(fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
-      )
-    }
-  }
-}
-
-class RefreshCallback : ActionCallback {
-  override suspend fun onAction(
-    context: Context,
-    glanceId: GlanceId,
-    parameters: ActionParameters,
-  ) {
-    WeightWorker.enqueueOneTimeWork(context)
+    provideGlanceWidgetContent(
+      context = context,
+      appWidgetId = appWidgetId,
+      dataStore = dataStore,
+      clock = clock,
+      isSyncRunningFlow = isSyncRunningFlow,
+    )
   }
 }
