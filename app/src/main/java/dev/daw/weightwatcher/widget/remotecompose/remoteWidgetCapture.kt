@@ -39,23 +39,15 @@ import androidx.compose.remote.creation.compose.state.RemoteBoolean
 import androidx.compose.remote.creation.compose.state.RemoteColor
 import androidx.compose.remote.creation.compose.state.RemoteFloat
 import androidx.compose.remote.creation.compose.state.RemoteInt
-import androidx.compose.remote.creation.compose.state.RemoteLong
 import androidx.compose.remote.creation.compose.state.RemotePaint
 import androidx.compose.remote.creation.compose.state.RemoteString
-import androidx.compose.remote.creation.compose.state.RemoteTimeVariables
-import androidx.compose.remote.creation.compose.state.ceil
 import androidx.compose.remote.creation.compose.state.createThemedRemoteColor
-import androidx.compose.remote.creation.compose.state.deltaFromReferenceInHours
-import androidx.compose.remote.creation.compose.state.floor
 import androidx.compose.remote.creation.compose.state.rc
 import androidx.compose.remote.creation.compose.state.rdp
 import androidx.compose.remote.creation.compose.state.rf
 import androidx.compose.remote.creation.compose.state.ri
 import androidx.compose.remote.creation.compose.state.rs
 import androidx.compose.remote.creation.compose.state.rsp
-import androidx.compose.remote.creation.compose.state.selectIfGt
-import androidx.compose.remote.creation.compose.state.selectIfLt
-import androidx.compose.remote.creation.compose.state.tween
 import androidx.compose.remote.creation.profile.Profile
 import androidx.compose.remote.creation.profile.RcPlatformProfiles
 import androidx.compose.remote.foundation.icon.RemoteBasicIcon
@@ -67,21 +59,16 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import com.google.common.primitives.Ints
 import dev.daw.weightwatcher.WeightGlanceWidget
-import dev.daw.weightwatcher.days
-import dev.daw.weightwatcher.hours
 import dev.daw.weightwatcher.widget.WidgetState
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
-import java.time.Duration
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private const val CLICK_ACTION_ID = 1
 private const val WIDGETS_V7_API_LEVEL = 7L
-private const val FLOAT_TRUNCATION_EPSILON = 1e-4f
 
 /**
  * Selects the RemoteCompose widget [Profile] matching the OS player's wire version: `WIDGETS_V6` on
@@ -136,7 +123,7 @@ internal suspend fun captureWidgetDocumentBytes(
   }
 
 @RequiresApi(Build.VERSION_CODES.BAKLAVA)
-// hostAction(id), RemoteLong(Long), deltaFromReferenceInHours, and selectIfGt are LIBRARY_GROUP.
+// hostAction(id) is @RestrictTo(LIBRARY_GROUP) in androidx.compose.remote:1.0.0-alpha23.
 @Suppress("RestrictedApi")
 @Composable
 @RemoteComposable
@@ -201,23 +188,13 @@ private fun RemoteWidgetCard(state: WidgetState) {
       staticLabelText = "None".rs
     }
     is WidgetState.Active -> {
-      val elapsedHours: RemoteFloat =
-        -deltaFromReferenceInHours(RemoteLong(state.lastRecordTime.toEpochMilli()))
-      val lastRecordEpochSecond: Int = Ints.saturatedCast(state.lastRecordTime.epochSecond)
-      val elapsedSeconds: RemoteInt = RemoteTimeVariables.epochSecond - lastRecordEpochSecond.ri
+      val elapsed = RemoteDuration.since(state.lastRecordTime)
       iconTint =
-        tween(
-          from = primaryColor,
-          to = errorColor,
-          tween =
-            selectIfGt(
-              elapsedHours,
-              WeightGlanceWidget.STALE_THRESHOLD.toRemoteHours(),
-              1f.rf,
-              0f.rf,
-            ),
+        (elapsed isGreaterThan WeightGlanceWidget.STALE_THRESHOLD).select(
+          ifTrue = errorColor,
+          ifFalse = primaryColor,
         )
-      activeLabels = buildActiveStalenessLabels(elapsedHours, elapsedSeconds)
+      activeLabels = buildActiveStalenessLabels(elapsed)
       staticLabelText = null
     }
   }
@@ -288,49 +265,31 @@ private fun RemoteWidgetCard(state: WidgetState) {
 }
 
 /**
- * Builds the 4 unit-suffixed staleness labels (`Xm`/`Xh`/`Xd`/`Xy`) and their visibility states.
+ * Builds all 4 unit-suffixed staleness labels (`Xm`/`Xh`/`Xd`/`Xy`) unconditionally alongside
+ * visibility flags so only the active unit is shown.
  *
- * Uses a single `TextFromFloat` for the active tier's integer value and
- * `ComponentVisibilityOperation` (`mIntegerMap`) to pick the visible unit, avoiding `TextLookupInt`
- * (which does not re-evaluate when nested `TextMerge` values change on Android 16).
+ * Choosing between dynamic strings with `RemoteBoolean.select(RemoteString, RemoteString)` (which
+ * compiles to `TextLookupInt`) fails on Android 16 because the player does not re-evaluate the
+ * lookup when the underlying dynamic strings change, and can leave the text unresolved on initial
+ * layout. Rendering all 4 `RemoteText`s and toggling their visibility works reliably across Android
+ * 16 and 17+.
  */
-// selectIfLt is @RestrictTo(LIBRARY_GROUP) in androidx.compose.remote:1.0.0-alpha23.
-@Suppress("RestrictedApi")
 private fun buildActiveStalenessLabels(
-  elapsedHours: RemoteFloat,
-  elapsedSeconds: RemoteInt,
+  elapsed: RemoteDuration
 ): List<Pair<RemoteString, RemoteInt>> {
   val integerFormat = DecimalFormat("0", DecimalFormatSymbols.getInstance(Locale.ROOT))
-  val displayedValue: RemoteFloat =
-    selectIfLt(
-      elapsedHours,
-      WeightGlanceWidget.HOURS_THRESHOLD.toRemoteHours(),
-      truncateTowardsZero(elapsedHours * 1.hours.toRemoteMinutes()),
-      selectIfLt(
-        elapsedHours,
-        WeightGlanceWidget.DAYS_THRESHOLD.toRemoteHours(),
-        truncateTowardsZero(elapsedHours),
-        selectIfLt(
-          elapsedHours,
-          WeightGlanceWidget.YEARS_THRESHOLD.toRemoteHours(),
-          truncateTowardsZero(elapsedHours / 1.days.toRemoteHours()),
-          truncateTowardsZero(elapsedHours / WeightGlanceWidget.YEARS_THRESHOLD.toRemoteHours()),
-        ),
-      ),
-    )
-  val numberText: RemoteString = displayedValue.toRemoteString(integerFormat)
-  val isMinutes: RemoteBoolean =
-    elapsedSeconds.isLessThan(WeightGlanceWidget.HOURS_THRESHOLD.toRemoteSeconds())
-  val isUnderDays: RemoteBoolean =
-    elapsedSeconds.isLessThan(WeightGlanceWidget.DAYS_THRESHOLD.toRemoteSeconds())
-  val isUnderYears: RemoteBoolean =
-    elapsedSeconds.isLessThan(WeightGlanceWidget.YEARS_THRESHOLD.toRemoteSeconds())
+  val isMinutes: RemoteBoolean = elapsed isLessThan WeightGlanceWidget.HOURS_THRESHOLD
+  val isUnderDays: RemoteBoolean = elapsed isLessThan WeightGlanceWidget.DAYS_THRESHOLD
+  val isUnderYears: RemoteBoolean = elapsed isLessThan WeightGlanceWidget.YEARS_THRESHOLD
 
   return listOf(
-    (numberText + "m".rs) to visibilityFor(isMinutes),
-    (numberText + "h".rs) to visibilityFor(isMinutes.not().and(isUnderDays)),
-    (numberText + "d".rs) to visibilityFor(isUnderDays.not().and(isUnderYears)),
-    (numberText + "y".rs) to visibilityFor(isUnderYears.not()),
+    (elapsed.toWholeMinutes().toRemoteString(integerFormat) + "m".rs) to visibilityFor(isMinutes),
+    (elapsed.toWholeHours().toRemoteString(integerFormat) + "h".rs) to
+      visibilityFor(isMinutes.not().and(isUnderDays)),
+    (elapsed.toWholeDays().toRemoteString(integerFormat) + "d".rs) to
+      visibilityFor(isUnderDays.not().and(isUnderYears)),
+    (elapsed.toWholeYears(WeightGlanceWidget.YEARS_THRESHOLD).toRemoteString(integerFormat) +
+      "y".rs) to visibilityFor(isUnderYears.not()),
   )
 }
 
@@ -357,22 +316,6 @@ private fun WidgetLabelText(
     maxLines = 1,
   )
 }
-
-// selectIfLt is @RestrictTo(LIBRARY_GROUP) in androidx.compose.remote:1.0.0-alpha23.
-@Suppress("RestrictedApi")
-private fun truncateTowardsZero(value: RemoteFloat): RemoteFloat =
-  selectIfLt(
-    value,
-    0f.rf,
-    ceil(value - FLOAT_TRUNCATION_EPSILON.rf),
-    floor(value + FLOAT_TRUNCATION_EPSILON.rf),
-  )
-
-private fun Duration.toRemoteHours(): RemoteFloat = toHours().toFloat().rf
-
-private fun Duration.toRemoteMinutes(): RemoteFloat = toMinutes().toFloat().rf
-
-private fun Duration.toRemoteSeconds(): RemoteInt = seconds.toInt().ri
 
 @Composable
 @RemoteComposable
