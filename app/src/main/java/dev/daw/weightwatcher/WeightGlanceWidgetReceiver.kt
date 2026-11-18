@@ -2,7 +2,6 @@ package dev.daw.weightwatcher
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
-import android.os.Build
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import dagger.hilt.android.EntryPointAccessors
@@ -20,7 +19,7 @@ class WeightGlanceWidgetReceiver : GlanceAppWidgetReceiver() {
     appWidgetManager: AppWidgetManager,
     appWidgetIds: IntArray,
   ) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+    if (WeightGlanceWidget.useRemoteCompose()) {
       val pendingResult: PendingResult? = goAsync()
       CoroutineScope(Dispatchers.Default).launch {
         try {

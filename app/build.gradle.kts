@@ -6,6 +6,12 @@ plugins {
   id("com.google.protobuf")
 }
 
+val widgetRenderer: String = providers.gradleProperty("widgetRenderer").orNull ?: "auto"
+
+require(widgetRenderer in setOf("auto", "glance")) {
+  "Unsupported -PwidgetRenderer=$widgetRenderer (expected 'auto' or 'glance')"
+}
+
 android {
   namespace = "dev.daw.weightwatcher"
   compileSdk = 37
@@ -17,6 +23,7 @@ android {
     targetSdk = 37
     versionCode = 7
     versionName = "7"
+    buildConfigField("boolean", "ENABLE_REMOTE_COMPOSE", (widgetRenderer == "auto").toString())
   }
 
   buildTypes {
@@ -28,7 +35,10 @@ android {
     }
   }
 
-  buildFeatures { compose = true }
+  buildFeatures {
+    buildConfig = true
+    compose = true
+  }
 
   kotlin { jvmToolchain(25) }
 

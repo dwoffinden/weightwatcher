@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.os.Build
+import androidx.annotation.ChecksSdkIntAtLeast
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.glance.GlanceId
@@ -79,6 +80,10 @@ class WeightGlanceWidget : GlanceAppWidget() {
         getWidgetDataType(context, glanceId)
       }
 
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.BAKLAVA)
+    internal fun useRemoteCompose(): Boolean =
+      BuildConfig.ENABLE_REMOTE_COMPOSE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA
+
     /**
      * Returns the [AppWidgetManager] IDs of all placed widgets.
      *
@@ -103,7 +108,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
    * `SessionWorker`.
    */
   suspend fun updateAllWidgets(context: Context, isSyncRunning: Boolean) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+    if (useRemoteCompose()) {
       val appWidgetIds: IntArray = getPlacedAppWidgetIds(context)
       if (appWidgetIds.isEmpty()) {
         return
@@ -162,7 +167,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
     glanceId: GlanceId,
     dataStore: DataStore<SyncSettings>? = null,
   ) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+    if (useRemoteCompose()) {
       val resolvedDataStore: DataStore<SyncSettings> =
         dataStore
           ?: EntryPointAccessors.fromApplication<Dependencies>(context).syncSettingsDataStore()
@@ -186,10 +191,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
       runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }
         .getOrDefault(AppWidgetManager.INVALID_APPWIDGET_ID)
 
-    if (
-      Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA &&
-        appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
-    ) {
+    if (useRemoteCompose() && appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
       updateRemoteComposeWidgets(
         context = context,
         appWidgetIds = intArrayOf(appWidgetId),

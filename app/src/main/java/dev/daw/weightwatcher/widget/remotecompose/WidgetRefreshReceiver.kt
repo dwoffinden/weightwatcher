@@ -4,7 +4,6 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import dagger.hilt.android.EntryPointAccessors
 import dev.daw.weightwatcher.WeightGlanceWidget
 import dev.daw.weightwatcher.WeightWorker
@@ -33,7 +32,7 @@ class WidgetRefreshReceiver : BroadcastReceiver() {
 
   override fun onReceive(context: Context, intent: Intent) {
     val appWidgetIds: IntArray = WeightGlanceWidget.getPlacedAppWidgetIds(context)
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA || appWidgetIds.isEmpty()) {
+    if (!WeightGlanceWidget.useRemoteCompose() || appWidgetIds.isEmpty()) {
       WeightWorker.enqueueOneTimeWork(context)
       return
     }
