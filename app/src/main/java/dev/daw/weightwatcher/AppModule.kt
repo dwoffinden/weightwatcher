@@ -10,7 +10,6 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import java.time.InstantSource
 import javax.inject.Singleton
 
 @Module
@@ -25,7 +24,7 @@ object AppModule {
       produceFile = { context.dataStoreFile("sync_settings.pb") },
     )
 
-  @Provides fun provideClock(): InstantSource = InstantSource.system()
+  @Provides fun provideClock(): AppClock = AppClock.system()
 
   @Provides
   fun provideWidgetUpdater(@ApplicationContext context: Context): WidgetUpdater = WidgetUpdater {

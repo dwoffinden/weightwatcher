@@ -20,6 +20,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
+import androidx.glance.appwidget.AndroidRemoteViews
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.appWidgetBackground
@@ -35,9 +36,11 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
+import androidx.glance.layout.wrapContentSize
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import dev.daw.weightwatcher.AppClock
 import dev.daw.weightwatcher.DataType
 import dev.daw.weightwatcher.MainActivity
 import dev.daw.weightwatcher.SyncSettings
@@ -49,7 +52,6 @@ import dev.daw.weightwatcher.widget.WidgetClickAction
 import dev.daw.weightwatcher.widget.WidgetState
 import dev.daw.weightwatcher.widget.resolveWidgetState
 import java.time.Duration
-import java.time.InstantSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
@@ -60,11 +62,12 @@ internal suspend fun GlanceAppWidget.provideGlanceWidgetContent(
   context: Context,
   appWidgetId: Int,
   dataStore: DataStore<SyncSettings>,
-  clock: InstantSource,
+  clock: AppClock,
   isSyncRunningFlow: Flow<Boolean>,
 ) {
   val initialSettings: SyncSettings = dataStore.data.first()
   val initialIsSyncRunning: Boolean = isSyncRunningFlow.first()
+  val isPlacedWidget: Boolean = appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
 
   provideContent {
     val prefs: Preferences = currentState()
@@ -79,12 +82,24 @@ internal suspend fun GlanceAppWidget.provideGlanceWidgetContent(
         isSyncRunning = isSyncRunning,
       )
 
-    GlanceTheme { GlanceWidgetContent(context = context, state = state, clock = clock) }
+    GlanceTheme {
+      GlanceWidgetContent(
+        context = context,
+        state = state,
+        clock = clock,
+        useChronometer = isPlacedWidget,
+      )
+    }
   }
 }
 
 @Composable
-private fun GlanceWidgetContent(context: Context, state: WidgetState, clock: InstantSource) {
+private fun GlanceWidgetContent(
+  context: Context,
+  state: WidgetState,
+  clock: AppClock,
+  useChronometer: Boolean,
+) {
   val backgroundColor =
     ColorProvider(
       day = dynamicLightColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
@@ -126,22 +141,29 @@ private fun GlanceWidgetContent(context: Context, state: WidgetState, clock: Ins
       modifier = GlanceModifier.size(32.dp),
     )
     Spacer(modifier = GlanceModifier.height(4.dp))
-    val text: String =
-      if (staleness != null) {
-        WeightGlanceWidget.formatStaleness(staleness)
-      } else {
-        when (state) {
-          is WidgetState.Unconfigured,
-          is WidgetState.Syncing -> "Sync..."
-          is WidgetState.Unauthorized -> "Auth"
-          is WidgetState.NoRecords -> "None"
-          is WidgetState.Active -> error("Unreachable: Active always computes staleness")
+    if (useChronometer && staleness != null && staleness < WeightGlanceWidget.HOURS_THRESHOLD) {
+      AndroidRemoteViews(
+        remoteViews = createChronometerRemoteViews(context, staleness, clock.elapsedRealtime()),
+        modifier = GlanceModifier.wrapContentSize(),
+      )
+    } else {
+      val text: String =
+        if (staleness != null) {
+          WeightGlanceWidget.formatStaleness(staleness)
+        } else {
+          when (state) {
+            is WidgetState.Unconfigured,
+            is WidgetState.Syncing -> "Sync..."
+            is WidgetState.Unauthorized -> "Auth"
+            is WidgetState.NoRecords -> "None"
+            is WidgetState.Active -> error("Unreachable: Active always computes staleness")
+          }
         }
-      }
-    Text(
-      text = text,
-      style = TextStyle(fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
-    )
+      Text(
+        text = text,
+        style = TextStyle(fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
+      )
+    }
   }
 }
 

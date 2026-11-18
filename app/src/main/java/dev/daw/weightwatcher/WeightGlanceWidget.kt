@@ -19,7 +19,6 @@ import dagger.hilt.components.SingletonComponent
 import dev.daw.weightwatcher.DataTypeState.Status
 import dev.daw.weightwatcher.widget.glance.provideGlanceWidgetContent
 import java.time.Duration
-import java.time.InstantSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
@@ -37,7 +36,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
   interface Dependencies {
     fun syncSettingsDataStore(): DataStore<SyncSettings>
 
-    fun clock(): InstantSource
+    fun clock(): AppClock
   }
 
   companion object {
@@ -130,7 +129,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
   override suspend fun provideGlance(context: Context, id: GlanceId) {
     val dependencies: Dependencies = EntryPointAccessors.fromApplication(context)
     val dataStore: DataStore<SyncSettings> = dependencies.syncSettingsDataStore()
-    val clock: InstantSource = dependencies.clock()
+    val clock: AppClock = dependencies.clock()
     val isSyncRunningFlow: Flow<Boolean> = WeightWorker.isSyncing(context)
     val appWidgetId: Int =
       runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }
