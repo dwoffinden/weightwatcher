@@ -8,7 +8,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
@@ -47,9 +46,10 @@ import dev.daw.weightwatcher.MainActivity
 import dev.daw.weightwatcher.R
 import dev.daw.weightwatcher.SyncSettings
 import dev.daw.weightwatcher.WeightGlanceWidget
+import dev.daw.weightwatcher.WidgetConfig
 import dev.daw.weightwatcher.dataTypeActionParameters
-import dev.daw.weightwatcher.getWidgetDataTypes
 import dev.daw.weightwatcher.minus
+import dev.daw.weightwatcher.toDataTypes
 import dev.daw.weightwatcher.widget.WidgetClickAction
 import dev.daw.weightwatcher.widget.WidgetItemState
 import dev.daw.weightwatcher.widget.WidgetState
@@ -80,8 +80,8 @@ internal suspend fun GlanceAppWidget.provideGlanceWidgetContent(
   val isPlacedWidget: Boolean = appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
 
   provideContent {
-    val prefs: Preferences = currentState()
-    val dataTypes: ImmutableSet<DataType> = prefs.getWidgetDataTypes()
+    val config: WidgetConfig = currentState()
+    val dataTypes: ImmutableSet<DataType> = config.toDataTypes()
     val settings: SyncSettings by dataStore.data.collectAsState(initial = initialSettings)
     val isSyncRunning: Boolean by isSyncRunningFlow.collectAsState(initial = initialIsSyncRunning)
     val state: WidgetState =

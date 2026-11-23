@@ -6,7 +6,6 @@ import android.content.Context
 import android.os.Build
 import androidx.annotation.ChecksSdkIntAtLeast
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
@@ -15,7 +14,7 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.appwidget.updateAll
-import androidx.glance.state.PreferencesGlanceStateDefinition
+import androidx.glance.state.GlanceStateDefinition
 import com.google.common.collect.ImmutableSet
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -66,19 +65,20 @@ class WeightGlanceWidget : GlanceAppWidget() {
     internal fun isSyncing(status: Status, isSyncRunning: Boolean): Boolean =
       isSyncRunning || status == Status.STATUS_UNSPECIFIED
 
-    fun previewPreferences(dataTypes: ImmutableSet<DataType>): Preferences =
-      widgetDataTypesPreferencesOf(dataTypes)
+    fun previewState(dataTypes: ImmutableSet<DataType>): WidgetConfig = dataTypes.toWidgetConfig()
 
     /** Returns the widget's configured data types in display order, or empty if unconfigured. */
     suspend fun getWidgetDataTypes(context: Context, glanceId: GlanceId): ImmutableSet<DataType> =
-      getAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId).getWidgetDataTypes()
+      getAppWidgetState(context, WidgetConfigStateDefinition, glanceId).toDataTypes()
 
     suspend fun setWidgetDataTypes(
       context: Context,
       glanceId: GlanceId,
       dataTypes: ImmutableSet<DataType>,
     ) {
-      updateAppWidgetState(context, glanceId) { prefs -> prefs.setWidgetDataTypes(dataTypes) }
+      updateAppWidgetState(context, WidgetConfigStateDefinition, glanceId) {
+        dataTypes.toWidgetConfig()
+      }
     }
 
     /** Returns the data types tracked by any configured widget. */
@@ -118,7 +118,14 @@ class WeightGlanceWidget : GlanceAppWidget() {
     }
   }
 
+  override val stateDefinition: GlanceStateDefinition<WidgetConfig> = WidgetConfigStateDefinition
   override val sizeMode: SizeMode = SizeMode.Exact
+
+  override suspend fun onDelete(context: Context, glanceId: GlanceId) {
+    super.onDelete(context, glanceId)
+    val appWidgetId: Int = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
+    WidgetConfigStateDefinition.deleteLegacyFile(context, appWidgetId)
+  }
 
   /**
    * Updates all placed widgets. On Android 16+, pushes RemoteCompose directly without Glance's

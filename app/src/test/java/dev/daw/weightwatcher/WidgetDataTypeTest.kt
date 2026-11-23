@@ -2,12 +2,6 @@ package dev.daw.weightwatcher
 
 import android.app.Application
 import android.content.Intent
-import androidx.datastore.preferences.core.MutablePreferences
-import androidx.datastore.preferences.core.byteArrayPreferencesKey
-import androidx.datastore.preferences.core.emptyPreferences
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.mutablePreferencesOf
-import androidx.datastore.preferences.core.preferencesOf
 import androidx.glance.action.ActionParameters
 import com.google.common.collect.ImmutableSet
 import com.google.common.truth.Truth.assertThat
@@ -22,83 +16,37 @@ import org.robolectric.annotation.Config
 class WidgetDataTypeTest {
 
   @Test
-  fun widgetDataTypesPreferencesOf_storesDataType(@TestParameter dataType: DataType) {
-    assertThat(widgetDataTypesPreferencesOf(ImmutableSet.of(dataType)).getWidgetDataTypes())
-      .containsExactly(dataType)
+  fun toWidgetConfig_roundTripsSingleDataType(@TestParameter dataType: DataType) {
+    assertThat(ImmutableSet.of(dataType).toWidgetConfig().toDataTypes()).containsExactly(dataType)
   }
 
   @Test
-  fun setWidgetDataTypes_storesOrderedSetAndClearsLegacyKey() {
-    val prefs: MutablePreferences = mutablePreferencesOf(intPreferencesKey("data_type") to 1)
+  fun toDataTypes_duplicateEntriesInConfig_deduplicatesPreservingOrder() {
+    val config: WidgetConfig = widgetConfig {
+      dataTypes +=
+        listOf(
+          SyncSettings.DataType.SLEEP,
+          SyncSettings.DataType.WEIGHT,
+          SyncSettings.DataType.SLEEP,
+          SyncSettings.DataType.STEPS,
+        )
+    }
 
-    prefs.setWidgetDataTypes(ImmutableSet.of(DataType.SLEEP, DataType.WEIGHT, DataType.STEPS))
-
-    assertThat(prefs.getWidgetDataTypes())
-      .containsExactly(DataType.SLEEP, DataType.WEIGHT, DataType.STEPS)
-      .inOrder()
-    assertThat(prefs[intPreferencesKey("data_type")]).isNull()
-  }
-
-  @Test
-  fun getWidgetDataTypes_emptyPreferences_returnsEmpty() {
-    assertThat(emptyPreferences().getWidgetDataTypes()).isEmpty()
-  }
-
-  @Test
-  fun getWidgetDataTypes_legacyIntPreference_returnsSingleElement(
-    @TestParameter dataType: DataType
-  ) {
-    val prefs = preferencesOf(intPreferencesKey("data_type") to dataType.proto.number)
-    assertThat(prefs.getWidgetDataTypes()).containsExactly(dataType)
-  }
-
-  @Test
-  fun getWidgetDataTypes_unknownLegacyPreferenceNumber_returnsEmpty(
-    @TestParameter("0", "-1", "999") number: Int
-  ) {
-    val prefs = preferencesOf(intPreferencesKey("data_type") to number)
-    assertThat(prefs.getWidgetDataTypes()).isEmpty()
-  }
-
-  @Test
-  fun getWidgetDataTypes_corruptConfigBytes_returnsEmpty() {
-    val prefs =
-      preferencesOf(byteArrayPreferencesKey("widget_config") to byteArrayOf(0xFF.toByte()))
-    assertThat(prefs.getWidgetDataTypes()).isEmpty()
-  }
-
-  @Test
-  fun getWidgetDataTypes_duplicateEntriesInConfig_deduplicatesPreservingOrder() {
-    val bytes: ByteArray =
-      widgetConfig {
-          dataTypes +=
-            listOf(
-              SyncSettings.DataType.SLEEP,
-              SyncSettings.DataType.WEIGHT,
-              SyncSettings.DataType.SLEEP,
-              SyncSettings.DataType.STEPS,
-            )
-        }
-        .toByteArray()
-    val prefs = preferencesOf(byteArrayPreferencesKey("widget_config") to bytes)
-
-    assertThat(prefs.getWidgetDataTypes())
+    assertThat(config.toDataTypes())
       .containsExactly(DataType.SLEEP, DataType.WEIGHT, DataType.STEPS)
       .inOrder()
   }
 
   @Test
-  fun getWidgetDataTypes_unknownProtoEnumInConfig_ignoresUnknownEntries() {
-    val bytes: ByteArray =
+  fun toDataTypes_unknownProtoEnumInConfig_ignoresUnknownEntries() {
+    val config: WidgetConfig =
       WidgetConfig.newBuilder()
         .addDataTypesValue(999)
         .addDataTypes(SyncSettings.DataType.WEIGHT)
         .addDataTypes(SyncSettings.DataType.DATA_TYPE_UNSPECIFIED)
         .build()
-        .toByteArray()
-    val prefs = preferencesOf(byteArrayPreferencesKey("widget_config") to bytes)
 
-    assertThat(prefs.getWidgetDataTypes()).containsExactly(DataType.WEIGHT)
+    assertThat(config.toDataTypes()).containsExactly(DataType.WEIGHT)
   }
 
   @Test
@@ -114,6 +62,13 @@ class WidgetDataTypeTest {
     assertThat(intent.getWidgetDataTypes())
       .containsExactly(DataType.HEART_RATE, DataType.STEPS)
       .inOrder()
+  }
+
+  @Test
+  fun getWidgetDataTypes_corruptConfigBytesOnIntent_returnsEmpty() {
+    val intent =
+      Intent().putExtra("dev.daw.weightwatcher.EXTRA_WIDGET_CONFIG", byteArrayOf(0xFF.toByte()))
+    assertThat(intent.getWidgetDataTypes()).isEmpty()
   }
 
   @Test

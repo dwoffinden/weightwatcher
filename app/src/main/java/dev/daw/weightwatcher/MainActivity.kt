@@ -212,7 +212,7 @@ class MainActivity : ComponentActivity() {
         manager.requestPinGlanceAppWidget(
           receiver = WeightGlanceWidgetReceiver::class.java,
           preview = glanceAppWidget,
-          previewState = WeightGlanceWidget.previewPreferences(chosenTypes),
+          previewState = WeightGlanceWidget.previewState(chosenTypes),
           successCallback = WidgetPinReceiver.createSuccessCallback(this@MainActivity, chosenTypes),
         )
       }
