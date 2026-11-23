@@ -220,7 +220,7 @@ class MainActivityTest {
   }
 
   @Test
-  fun configureMode_twoCellWidth_capsAtFiveAndPromptsResize() {
+  fun configureMode_twoCellWidth_capsAtFourAndPromptsResize() {
     fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
     val appWidgetId: Int = placeWidget(context)
     val options = Bundle().apply { putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 158) }
@@ -232,14 +232,40 @@ class MainActivityTest {
 
     ActivityScenario.launchActivityForResult<MainActivity>(intent).use {
       val additionalTypes: List<DataType> =
-        DataType.entries.filter { it != DataType.WEIGHT }.take(4)
+        DataType.entries.filter { it != DataType.WEIGHT }.take(3)
       for (dataType in additionalTypes) {
         composeTestRule.onNodeWithText(dataType.displayName).performScrollTo().performClick()
       }
       val extraType: DataType =
         DataType.entries.first { it != DataType.WEIGHT && it !in additionalTypes }
 
-      composeTestRule.onNodeWithText("Widget order (5/5)").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Widget order (4/4)").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Widget full, resize wider for more slots").assertIsDisplayed()
+      composeTestRule.onNodeWithText(extraType.displayName).assertIsNotEnabled()
+    }
+  }
+
+  @Test
+  fun configureMode_threeCellWidth_capsAtSeven() {
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
+    val appWidgetId: Int = placeWidget(context)
+    val options = Bundle().apply { putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 245) }
+    AppWidgetManager.getInstance(context).updateAppWidgetOptions(appWidgetId, options)
+    val intent =
+      Intent(context, MainActivity::class.java)
+        .setAction(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
+        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+
+    ActivityScenario.launchActivityForResult<MainActivity>(intent).use {
+      val additionalTypes: List<DataType> =
+        DataType.entries.filter { it != DataType.WEIGHT }.take(6)
+      for (dataType in additionalTypes) {
+        composeTestRule.onNodeWithText(dataType.displayName).performScrollTo().performClick()
+      }
+      val extraType: DataType =
+        DataType.entries.first { it != DataType.WEIGHT && it !in additionalTypes }
+
+      composeTestRule.onNodeWithText("Widget order (7/7)").assertIsDisplayed()
       composeTestRule.onNodeWithText("Widget full, resize wider for more slots").assertIsDisplayed()
       composeTestRule.onNodeWithText(extraType.displayName).assertIsNotEnabled()
     }
@@ -249,7 +275,7 @@ class MainActivityTest {
   fun configureMode_fourCellWidth_allowsNineTypes() {
     fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
     val appWidgetId: Int = placeWidget(context)
-    val options = Bundle().apply { putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280) }
+    val options = Bundle().apply { putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 330) }
     AppWidgetManager.getInstance(context).updateAppWidgetOptions(appWidgetId, options)
     val intent =
       Intent(context, MainActivity::class.java)

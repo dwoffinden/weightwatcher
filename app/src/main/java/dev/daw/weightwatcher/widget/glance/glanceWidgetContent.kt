@@ -131,6 +131,7 @@ internal fun GlanceWidgetContent(
         Text(
           text = "Sync...",
           style = TextStyle(fontWeight = FontWeight.Bold, color = WIDGET_ON_SURFACE_COLOUR),
+          maxLines = 1,
         )
       }
     }
@@ -226,6 +227,7 @@ private fun GlanceWidgetTile(
       Text(
         text = text,
         style = TextStyle(fontWeight = FontWeight.Bold, color = WIDGET_ON_SURFACE_COLOUR),
+        maxLines = 1,
       )
     }
   }

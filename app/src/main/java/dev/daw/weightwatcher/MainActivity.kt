@@ -81,7 +81,7 @@ class MainActivity : ComponentActivity() {
     private val BOTTOM_SCREEN_PADDING: Dp = 32.dp
     private val SCROLL_FADE_HEIGHT: Dp = 32.dp
     private const val WIDGET_HORIZONTAL_PADDING_DP = 8
-    private const val MIN_SLOT_WIDTH_DP = 30
+    private const val MIN_SLOT_WIDTH_DP = 33
     private const val MIN_WIDGET_SLOTS = 2
     private const val TYPICAL_CELL_PITCH_DP = 86
     private const val TYPICAL_CELL_GAP_DP = 13
@@ -93,8 +93,10 @@ class MainActivity : ComponentActivity() {
       )
 
     internal fun suggestedWidthCells(typeCount: Int): Int {
-      val requiredWidthDp: Int =
-        typeCount.coerceAtLeast(1) * MIN_SLOT_WIDTH_DP + WIDGET_HORIZONTAL_PADDING_DP
+      if (typeCount <= MIN_WIDGET_SLOTS) {
+        return 1
+      }
+      val requiredWidthDp: Int = typeCount * MIN_SLOT_WIDTH_DP + WIDGET_HORIZONTAL_PADDING_DP
       return ((requiredWidthDp + TYPICAL_CELL_GAP_DP + TYPICAL_CELL_PITCH_DP - 1) /
           TYPICAL_CELL_PITCH_DP)
         .coerceAtLeast(1)
