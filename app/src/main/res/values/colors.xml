@@ -1,16 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Day/night aliases over Android 14+ (API 34) dynamic system colour tokens so Glance widgets and
-  XML RemoteViews (widget_chronometer, widget_initial) match RemoteCompose and react immediately
-  to dark-mode and wallpaper theme changes without recomposing.
-
-  Glance's built-in GlanceTheme instead uses legacy API 31 tonal tokens and hardcodes static M3
-  2021 error colours, which diverges visibly from Android 16/17's dynamic system_error_* palette.
+Day/night aliases over Android 14+ (API 34) dynamic system colour tokens so Glance widgets and
+XML RemoteViews (widget_chronometer, widget_initial) match RemoteCompose and react immediately
+to dark-mode and wallpaper theme changes without recomposing.
+Glance's built-in GlanceTheme instead uses legacy API 31 tonal tokens and hardcodes static M3
+2021 error colours, which diverges visibly from Android 16/17's dynamic system_error_* palette.
 -->
 <resources>
-    <color name="widget_error">@android:color/system_error_light</color>
-    <color name="widget_on_surface">@android:color/system_on_surface_light</color>
-    <color name="widget_on_surface_variant">@android:color/system_on_surface_variant_light</color>
-    <color name="widget_primary">@android:color/system_primary_light</color>
-    <color name="widget_surface_container">@android:color/system_surface_container_light</color>
+ <color name="widget_error">@android:color/system_error_light</color>
+ <color name="widget_on_surface">@android:color/system_on_surface_light</color>
+ <color name="widget_on_surface_variant">@android:color/system_on_surface_variant_light</color>
+ <color name="widget_primary">@android:color/system_primary_light</color>
+ <color name="widget_surface_container">@android:color/system_surface_container_light</color>
 </resources>

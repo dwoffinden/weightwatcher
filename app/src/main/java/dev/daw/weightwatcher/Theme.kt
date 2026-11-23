@@ -25,7 +25,8 @@ fun WeightWatcherTheme(
           error = Color(context.getColor(android.R.color.system_error_dark)),
           onError = Color(context.getColor(android.R.color.system_on_error_dark)),
           errorContainer = Color(context.getColor(android.R.color.system_error_container_dark)),
-          onErrorContainer = Color(context.getColor(android.R.color.system_on_error_container_dark)),
+          onErrorContainer =
+            Color(context.getColor(android.R.color.system_on_error_container_dark)),
         )
     } else {
       dynamicLightColorScheme(context)
