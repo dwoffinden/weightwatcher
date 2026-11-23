@@ -10,6 +10,7 @@ import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
 import androidx.datastore.core.DataStore
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import com.google.common.collect.ImmutableSet
 import dev.daw.weightwatcher.DataType
 import dev.daw.weightwatcher.MainActivity
 import dev.daw.weightwatcher.SyncSettings
@@ -42,12 +43,12 @@ internal suspend fun updateRemoteComposeWidgets(
   val settings: SyncSettings = dataStore.data.first()
   for (appWidgetId in appWidgetIds) {
     val glanceId = glanceAppWidgetManager.getGlanceIdBy(appWidgetId)
-    val dataType: DataType? = WeightGlanceWidget.getWidgetDataType(context, glanceId)
+    val dataTypes: ImmutableSet<DataType> = WeightGlanceWidget.getWidgetDataTypes(context, glanceId)
     val remoteViews: RemoteViews =
       buildRemoteComposeWidgetViews(
         context = context,
         appWidgetId = appWidgetId,
-        dataType = dataType,
+        dataTypes = dataTypes,
         settings = settings,
         isSyncRunning = isSyncRunning,
       )
@@ -59,21 +60,21 @@ internal suspend fun updateRemoteComposeWidgets(
 internal suspend fun buildRemoteComposeWidgetViews(
   context: Context,
   appWidgetId: Int,
-  dataType: DataType?,
+  dataTypes: ImmutableSet<DataType>,
   settings: SyncSettings,
   isSyncRunning: Boolean,
 ): RemoteViews {
   val state: WidgetState =
     resolveWidgetState(
       appWidgetId = appWidgetId,
-      dataType = dataType,
+      dataTypes = dataTypes,
       settings = settings,
       isSyncRunning = isSyncRunning,
     )
   return captureWidgetRemoteViews(
     context = context,
     state = state,
-    onClickPendingIntent = state.clickAction.toPendingIntent(context),
+    pendingIntentForAction = { action -> action.toPendingIntent(context) },
   )
 }
 

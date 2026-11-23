@@ -5,7 +5,9 @@ import android.app.Instrumentation
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -16,6 +18,7 @@ import androidx.health.connect.client.testing.FakeHealthConnectClient
 import androidx.health.connect.client.testing.FakePermissionController
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import com.google.common.collect.ImmutableSet
 import com.google.common.truth.Truth.assertThat
 import dagger.hilt.android.testing.BindValue
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -95,15 +98,36 @@ class MainActivityTest {
   }
 
   @Test
-  fun selectingTypeWithoutPermission_promptsForThatTypesPermission() {
+  fun selectingSecondTypeWithoutPermission_promptsForMissingTypeAndShowsOrderPreview() {
     fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
     permissionController.grantPermissions(SyncManager.requiredPermissionsFor(DataType.WEIGHT))
 
     ActivityScenario.launch(MainActivity::class.java).use {
       composeTestRule.onNodeWithText("Steps").performScrollTo().performClick()
 
+      composeTestRule.onNodeWithText("1. Weight").assertIsDisplayed()
+      composeTestRule.onNodeWithText("2. Steps").assertIsDisplayed()
       composeTestRule
         .onNodeWithText("Need Health Connect read permissions for steps.")
+        .assertIsDisplayed()
+    }
+  }
+
+  @Test
+  fun selectingMultiplePermittedTypes_showsResizeTip() {
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
+    permissionController.grantPermissions(
+      SyncManager.requiredPermissionsFor(DataType.WEIGHT) +
+        SyncManager.requiredPermissionsFor(DataType.STEPS) +
+        SyncManager.requiredPermissionsFor(DataType.SLEEP)
+    )
+
+    ActivityScenario.launch(MainActivity::class.java).use {
+      composeTestRule.onNodeWithText("Steps").performScrollTo().performClick()
+      composeTestRule.onNodeWithText("Sleep").performScrollTo().performClick()
+
+      composeTestRule
+        .onNodeWithText("Tip: resize to 2x1 on your home screen for 3 types.")
         .assertIsDisplayed()
     }
   }
@@ -136,9 +160,124 @@ class MainActivityTest {
   }
 
   @Test
-  fun configureMode_selectingPermittedType_storesItOnWidgetAndReturnsOk() {
+  fun singleSelection_alwaysShowsWidgetOrderSectionWithResizeHint() {
     fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
-    permissionController.grantPermissions(SyncManager.requiredPermissionsFor(DataType.STEPS))
+
+    ActivityScenario.launch(MainActivity::class.java).use {
+      composeTestRule.onNodeWithText("Widget order (1)").assertIsDisplayed()
+      composeTestRule.onNodeWithText("1. Weight").assertIsDisplayed()
+      composeTestRule
+        .onNodeWithText("Tap below to add, tap a slot to remove · resize widget wider to fit more")
+        .assertIsDisplayed()
+    }
+  }
+
+  @Test
+  fun configureMode_alreadyWideEnough_hidesResizeTip() {
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
+    permissionController.grantPermissions(
+      SyncManager.requiredPermissionsFor(DataType.WEIGHT) +
+        SyncManager.requiredPermissionsFor(DataType.STEPS) +
+        SyncManager.requiredPermissionsFor(DataType.SLEEP)
+    )
+    val appWidgetId: Int = placeWidget(context)
+    val options = Bundle().apply { putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180) }
+    AppWidgetManager.getInstance(context).updateAppWidgetOptions(appWidgetId, options)
+    val intent =
+      Intent(context, MainActivity::class.java)
+        .setAction(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
+        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+
+    ActivityScenario.launchActivityForResult<MainActivity>(intent).use {
+      composeTestRule.onNodeWithText("Steps").performScrollTo().performClick()
+      composeTestRule.onNodeWithText("Sleep").performScrollTo().performClick()
+
+      composeTestRule.onNodeWithText("Save Widget").assertIsDisplayed()
+      composeTestRule
+        .onNodeWithText("Tip: resize to 2x1 on your home screen for 3 types.")
+        .assertDoesNotExist()
+    }
+  }
+
+  @Test
+  fun configureMode_narrowWidth_capsAtTwoAndPromptsResize() {
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
+    val appWidgetId: Int = placeWidget(context)
+    val options = Bundle().apply { putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 73) }
+    AppWidgetManager.getInstance(context).updateAppWidgetOptions(appWidgetId, options)
+    val intent =
+      Intent(context, MainActivity::class.java)
+        .setAction(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
+        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+
+    ActivityScenario.launchActivityForResult<MainActivity>(intent).use {
+      composeTestRule.onNodeWithText("Steps").performScrollTo().performClick()
+
+      composeTestRule.onNodeWithText("Widget order (2/2)").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Widget full, resize wider for more slots").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Sleep").assertIsNotEnabled()
+    }
+  }
+
+  @Test
+  fun configureMode_twoCellWidth_capsAtFiveAndPromptsResize() {
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
+    val appWidgetId: Int = placeWidget(context)
+    val options = Bundle().apply { putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 158) }
+    AppWidgetManager.getInstance(context).updateAppWidgetOptions(appWidgetId, options)
+    val intent =
+      Intent(context, MainActivity::class.java)
+        .setAction(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
+        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+
+    ActivityScenario.launchActivityForResult<MainActivity>(intent).use {
+      val additionalTypes: List<DataType> =
+        DataType.entries.filter { it != DataType.WEIGHT }.take(4)
+      for (dataType in additionalTypes) {
+        composeTestRule.onNodeWithText(dataType.displayName).performScrollTo().performClick()
+      }
+      val extraType: DataType =
+        DataType.entries.first { it != DataType.WEIGHT && it !in additionalTypes }
+
+      composeTestRule.onNodeWithText("Widget order (5/5)").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Widget full, resize wider for more slots").assertIsDisplayed()
+      composeTestRule.onNodeWithText(extraType.displayName).assertIsNotEnabled()
+    }
+  }
+
+  @Test
+  fun configureMode_fourCellWidth_allowsNineTypes() {
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
+    val appWidgetId: Int = placeWidget(context)
+    val options = Bundle().apply { putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280) }
+    AppWidgetManager.getInstance(context).updateAppWidgetOptions(appWidgetId, options)
+    val intent =
+      Intent(context, MainActivity::class.java)
+        .setAction(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
+        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+
+    ActivityScenario.launchActivityForResult<MainActivity>(intent).use {
+      val additionalTypes: List<DataType> =
+        DataType.entries.filter { it != DataType.WEIGHT }.take(8)
+      for (dataType in additionalTypes) {
+        composeTestRule.onNodeWithText(dataType.displayName).performScrollTo().performClick()
+      }
+      val extraType: DataType =
+        DataType.entries.first { it != DataType.WEIGHT && it !in additionalTypes }
+
+      composeTestRule.onNodeWithText("Widget order (9/9)").assertIsDisplayed()
+      composeTestRule.onNodeWithText("Widget full, resize wider for more slots").assertIsDisplayed()
+      composeTestRule.onNodeWithText(extraType.displayName).assertIsNotEnabled()
+    }
+  }
+
+  @Test
+  fun configureMode_savingMultiplePermittedTypes_storesOrderedListAndReturnsOk() {
+    fakeHealthConnectAccess.sdkStatus = HealthConnectClient.SDK_AVAILABLE
+    permissionController.grantPermissions(
+      SyncManager.requiredPermissionsFor(DataType.STEPS) +
+        SyncManager.requiredPermissionsFor(DataType.SLEEP)
+    )
     val appWidgetId: Int = placeWidget(context)
     val intent =
       Intent(context, MainActivity::class.java)
@@ -148,17 +287,21 @@ class MainActivityTest {
     ActivityScenario.launchActivityForResult<MainActivity>(intent).use { scenario ->
       lateinit var activity: MainActivity
       scenario.onActivity { activity = it }
+      // Deselect default Weight, then pick Sleep then Steps to verify selection order is preserved.
+      composeTestRule.onNodeWithText("Weight").performScrollTo().performClick()
+      composeTestRule.onNodeWithText("Sleep").performScrollTo().performClick()
       composeTestRule.onNodeWithText("Steps").performScrollTo().performClick()
+      composeTestRule.onNodeWithText("Save Widget").performClick()
 
       // Saving is asynchronous.
       composeTestRule.waitUntil(timeoutMillis = 5_000) { activity.isFinishing }
       val result: Instrumentation.ActivityResult = scenario.result
       val glanceId = GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId)
-      val widgetDataType: DataType? = runBlocking {
-        WeightGlanceWidget.getWidgetDataType(context, glanceId)
+      val widgetDataTypes: ImmutableSet<DataType> = runBlocking {
+        WeightGlanceWidget.getWidgetDataTypes(context, glanceId)
       }
       assertThat(result.resultCode).isEqualTo(Activity.RESULT_OK)
-      assertThat(widgetDataType).isEqualTo(DataType.STEPS)
+      assertThat(widgetDataTypes).containsExactly(DataType.SLEEP, DataType.STEPS).inOrder()
     }
   }
 }

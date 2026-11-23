@@ -22,11 +22,13 @@ import androidx.compose.remote.creation.compose.layout.RemoteCanvas
 import androidx.compose.remote.creation.compose.layout.RemoteColumn
 import androidx.compose.remote.creation.compose.layout.RemoteComposable
 import androidx.compose.remote.creation.compose.layout.RemoteOffset
+import androidx.compose.remote.creation.compose.layout.RemoteRow
 import androidx.compose.remote.creation.compose.layout.RemoteText
 import androidx.compose.remote.creation.compose.modifier.RemoteModifier
 import androidx.compose.remote.creation.compose.modifier.clickable
 import androidx.compose.remote.creation.compose.modifier.clip
 import androidx.compose.remote.creation.compose.modifier.drawWithContent
+import androidx.compose.remote.creation.compose.modifier.fillMaxHeight
 import androidx.compose.remote.creation.compose.modifier.fillMaxSize
 import androidx.compose.remote.creation.compose.modifier.fillMaxWidth
 import androidx.compose.remote.creation.compose.modifier.height
@@ -37,6 +39,7 @@ import androidx.compose.remote.creation.compose.modifier.visibility
 import androidx.compose.remote.creation.compose.shapes.RemoteRoundedCornerShape
 import androidx.compose.remote.creation.compose.state.RemoteBoolean
 import androidx.compose.remote.creation.compose.state.RemoteColor
+import androidx.compose.remote.creation.compose.state.RemoteDp
 import androidx.compose.remote.creation.compose.state.RemoteFloat
 import androidx.compose.remote.creation.compose.state.RemoteInt
 import androidx.compose.remote.creation.compose.state.RemotePaint
@@ -60,6 +63,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import dev.daw.weightwatcher.WeightGlanceWidget
+import dev.daw.weightwatcher.widget.WidgetClickAction
+import dev.daw.weightwatcher.widget.WidgetItemState
 import dev.daw.weightwatcher.widget.WidgetState
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
@@ -67,7 +72,7 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private const val CLICK_ACTION_ID = 1
+private const val FIRST_CLICK_ACTION_ID = 1
 private const val WIDGETS_V7_API_LEVEL = 7L
 
 /**
@@ -98,14 +103,28 @@ internal fun selectWidgetProfile(
 internal suspend fun captureWidgetRemoteViews(
   context: Context,
   state: WidgetState,
-  onClickPendingIntent: PendingIntent,
+  pendingIntentForAction: (WidgetClickAction) -> PendingIntent,
   profile: Profile = selectWidgetProfile(),
 ): RemoteViews {
   val bytes: ByteArray =
     captureWidgetDocumentBytes(context = context, state = state, profile = profile)
   val drawInstructions = RemoteViews.DrawInstructions.Builder(listOf(bytes)).build()
   return RemoteViews(drawInstructions).apply {
-    @SuppressLint("ResourceType") setOnClickPendingIntent(CLICK_ACTION_ID, onClickPendingIntent)
+    when (state) {
+      is WidgetState.Unconfigured -> {
+        @SuppressLint("ResourceType")
+        setOnClickPendingIntent(FIRST_CLICK_ACTION_ID, pendingIntentForAction(state.clickAction))
+      }
+      is WidgetState.Configured -> {
+        for ((index, item) in state.items.withIndex()) {
+          @SuppressLint("ResourceType")
+          setOnClickPendingIntent(
+            FIRST_CLICK_ACTION_ID + index,
+            pendingIntentForAction(item.clickAction),
+          )
+        }
+      }
+    }
   }
 }
 
@@ -122,18 +141,28 @@ internal suspend fun captureWidgetDocumentBytes(
       .bytes
   }
 
+private class RemoteTileVisuals(
+  val iconRes: Int,
+  val contentDescription: String,
+  val iconTint: RemoteColor,
+  val activeLabels: List<Pair<RemoteString, RemoteInt>>?,
+  val staticLabelText: RemoteString?,
+)
+
 @RequiresApi(Build.VERSION_CODES.BAKLAVA)
 // hostAction(id) is @RestrictTo(LIBRARY_GROUP) in androidx.compose.remote:1.0.0-alpha23.
 @Suppress("RestrictedApi")
 @Composable
 @RemoteComposable
 private fun RemoteWidgetCard(state: WidgetState) {
-  // Include a zero-valued FLOAT_TIME_IN_MIN term when active so RemoteComposeState.getOpsToUpdate()
-  // schedules a 1-minute Choreographer repaint while visible (ID_EPOCH_SECOND and TIME_FROM_NOW_HR
-  // alone report -1, and Android 16's TimeVariables.updateTime only loads ID_TIME_IN_MIN as a
-  // float, not an int).
+  val hasActiveTile: Boolean =
+    state is WidgetState.Configured && state.items.any { it is WidgetItemState.Active }
+  // Include a zero-valued FLOAT_TIME_IN_MIN term when any tile is active so
+  // RemoteComposeState.getOpsToUpdate() schedules a 1-minute Choreographer repaint while visible
+  // (ID_EPOCH_SECOND alone reports -1, and Android 16's TimeVariables.updateTime only loads
+  // ID_TIME_IN_MIN as a float, not an int).
   val minuteHeartbeat: RemoteFloat =
-    if (state is WidgetState.Active) {
+    if (hasActiveTile) {
       val minuteOfDay = RemoteFloat(RemoteContext.FLOAT_TIME_IN_MIN)
       minuteOfDay - minuteOfDay
     } else {
@@ -167,100 +196,193 @@ private fun RemoteWidgetCard(state: WidgetState) {
     )
   val cornerRadius = dimensionResource(android.R.dimen.system_app_widget_background_radius).rdp
   val shape = RemoteRoundedCornerShape(cornerRadius)
-  val iconTint: RemoteColor
-  val activeLabels: List<Pair<RemoteString, RemoteInt>>?
-  val staticLabelText: RemoteString?
-  when (state) {
-    is WidgetState.Unconfigured,
-    is WidgetState.Syncing -> {
-      iconTint = onSurfaceVariantColor
-      activeLabels = null
-      staticLabelText = "Sync...".rs
-    }
-    is WidgetState.Unauthorized -> {
-      iconTint = errorColor
-      activeLabels = null
-      staticLabelText = "Auth".rs
-    }
-    is WidgetState.NoRecords -> {
-      iconTint = onSurfaceVariantColor
-      activeLabels = null
-      staticLabelText = "None".rs
-    }
-    is WidgetState.Active -> {
-      val elapsed = RemoteDuration.since(state.lastRecordTime)
-      iconTint =
-        (elapsed isGreaterThan WeightGlanceWidget.STALE_THRESHOLD).select(
-          ifTrue = errorColor,
-          ifFalse = primaryColor,
+  val tiles: List<RemoteTileVisuals> =
+    when (state) {
+      is WidgetState.Unconfigured ->
+        listOf(
+          RemoteTileVisuals(
+            iconRes = state.iconRes,
+            contentDescription = state.contentDescription,
+            iconTint = onSurfaceVariantColor,
+            activeLabels = null,
+            staticLabelText = "Sync...".rs,
+          )
         )
-      activeLabels = buildActiveStalenessLabels(elapsed)
-      staticLabelText = null
+      is WidgetState.Configured ->
+        state.items.map { item ->
+          buildTileVisuals(
+            item = item,
+            primaryColor = primaryColor,
+            errorColor = errorColor,
+            onSurfaceVariantColor = onSurfaceVariantColor,
+          )
+        }
     }
-  }
+
+  val cardBackgroundModifier: RemoteModifier =
+    RemoteModifier.fillMaxSize()
+      .drawWithContent {
+        val radiusPx = cornerRadius.toPx()
+        drawRoundRect(
+          paint =
+            RemotePaint {
+              isAntiAlias = true
+              style = PaintingStyle.Fill
+              color = surfaceContainerColor
+            },
+          topLeft = RemoteOffset(0f.rf, 0f.rf),
+          size = size,
+          cornerRadius = RemoteOffset(radiusPx, radiusPx),
+        )
+        usePaint(RemotePaint()) {}
+        drawContent()
+      }
+      .clip(shape)
+
   // Wrap the clipped card inside an unclipped root box so root-level clipping works across players.
   RemoteBox(modifier = RemoteModifier.fillMaxSize()) {
-    RemoteColumn(
-      modifier =
-        RemoteModifier.fillMaxSize()
-          .drawWithContent {
-            val radiusPx = cornerRadius.toPx()
-            drawRoundRect(
-              paint =
-                RemotePaint {
-                  isAntiAlias = true
-                  style = PaintingStyle.Fill
-                  color = surfaceContainerColor
-                },
-              topLeft = RemoteOffset(0f.rf, 0f.rf),
-              size = size,
-              cornerRadius = RemoteOffset(radiusPx, radiusPx),
-            )
-            usePaint(RemotePaint()) {}
-            drawContent()
-          }
-          .clip(shape)
-          .clickable(hostAction(id = CLICK_ACTION_ID))
-          .semantics(mergeDescendants = true) {}
-          .padding(8.rdp),
-      verticalArrangement = RemoteArrangement.Center,
-      horizontalAlignment = RemoteAlignment.CenterHorizontally,
-    ) {
-      if (activeLabels != null) {
-        // Materialise dynamic expression ops (TimeAttribute, FloatExpression, IntegerExpression,
-        // ColorExpression, TextFromFloat, TextMerge) inside a childless RemoteCanvas
-        // (CanvasContent)
-        // so Android 16's LayoutComponent.inflate() retains them in the Container tree and runs
-        // them during initializeContext before TextLayout.computeWrapSize.
-        RemoteCanvas(modifier = RemoteModifier.size(0.rdp)) {
-          iconTint.id
-          for ((label, visibility) in activeLabels) {
-            label.id
-            visibility.id
-          }
+    if (tiles.size == 1) {
+      val tile: RemoteTileVisuals = tiles.single()
+      RemoteColumn(
+        modifier =
+          cardBackgroundModifier
+            .clickable(hostAction(id = FIRST_CLICK_ACTION_ID))
+            .semantics(mergeDescendants = true) {}
+            .padding(8.rdp),
+        verticalArrangement = RemoteArrangement.Center,
+        horizontalAlignment = RemoteAlignment.CenterHorizontally,
+      ) {
+        if (tile.activeLabels != null) {
+          HoistDynamicExpressions(listOf(tile))
         }
+        RemoteTileContent(tile = tile, iconSize = 32.rdp, onSurfaceColor = onSurfaceColor)
       }
-      RemoteBasicIcon(
-        imageVector = RemoteImageVector.vectorResource(state.iconRes),
-        contentDescription = state.contentDescription.rs,
-        modifier = RemoteModifier.size(32.rdp),
-        tint = iconTint,
-      )
-      RemoteBox(modifier = RemoteModifier.height(4.rdp))
-      if (activeLabels != null) {
-        RemoteBox(modifier = RemoteModifier.fillMaxWidth()) {
-          for ((label, visibility) in activeLabels) {
-            WidgetLabelText(
-              text = label,
-              color = onSurfaceColor,
-              modifier = RemoteModifier.fillMaxWidth().visibility(visibility),
-            )
+    } else {
+      val iconSize: RemoteDp = if (tiles.size <= 3) 28.rdp else 24.rdp
+      RemoteColumn(
+        modifier = cardBackgroundModifier.padding(horizontal = 4.rdp, vertical = 8.rdp)
+      ) {
+        if (hasActiveTile) {
+          HoistDynamicExpressions(tiles)
+        }
+        RemoteRow(
+          modifier = RemoteModifier.fillMaxSize(),
+          verticalAlignment = RemoteAlignment.CenterVertically,
+        ) {
+          for ((index, tile) in tiles.withIndex()) {
+            RemoteColumn(
+              modifier =
+                RemoteModifier.weight(1f)
+                  .fillMaxHeight()
+                  .clickable(hostAction(id = FIRST_CLICK_ACTION_ID + index))
+                  .semantics(mergeDescendants = true) {},
+              verticalArrangement = RemoteArrangement.Center,
+              horizontalAlignment = RemoteAlignment.CenterHorizontally,
+            ) {
+              RemoteTileContent(tile = tile, iconSize = iconSize, onSurfaceColor = onSurfaceColor)
+            }
           }
         }
-      } else if (staticLabelText != null) {
-        WidgetLabelText(text = staticLabelText, color = onSurfaceColor)
       }
     }
+  }
+}
+
+private fun buildTileVisuals(
+  item: WidgetItemState,
+  primaryColor: RemoteColor,
+  errorColor: RemoteColor,
+  onSurfaceVariantColor: RemoteColor,
+): RemoteTileVisuals =
+  when (item) {
+    is WidgetItemState.Syncing ->
+      RemoteTileVisuals(
+        iconRes = item.iconRes,
+        contentDescription = item.contentDescription,
+        iconTint = onSurfaceVariantColor,
+        activeLabels = null,
+        staticLabelText = "Sync...".rs,
+      )
+    is WidgetItemState.Unauthorized ->
+      RemoteTileVisuals(
+        iconRes = item.iconRes,
+        contentDescription = item.contentDescription,
+        iconTint = errorColor,
+        activeLabels = null,
+        staticLabelText = "Auth".rs,
+      )
+    is WidgetItemState.NoRecords ->
+      RemoteTileVisuals(
+        iconRes = item.iconRes,
+        contentDescription = item.contentDescription,
+        iconTint = onSurfaceVariantColor,
+        activeLabels = null,
+        staticLabelText = "None".rs,
+      )
+    is WidgetItemState.Active -> {
+      val elapsed = RemoteDuration.since(item.lastRecordTime)
+      RemoteTileVisuals(
+        iconRes = item.iconRes,
+        contentDescription = item.contentDescription,
+        iconTint =
+          (elapsed isGreaterThan WeightGlanceWidget.STALE_THRESHOLD).select(
+            ifTrue = errorColor,
+            ifFalse = primaryColor,
+          ),
+        activeLabels = buildActiveStalenessLabels(elapsed),
+        staticLabelText = null,
+      )
+    }
+  }
+
+/**
+ * Materialises dynamic expression ops inside a childless `RemoteCanvas` (`CanvasContent`) so
+ * Android 16's `LayoutComponent.inflate()` retains them in the `Container` tree and runs them
+ * during `initializeContext` before `TextLayout.computeWrapSize`.
+ */
+@Composable
+@RemoteComposable
+private fun HoistDynamicExpressions(tiles: List<RemoteTileVisuals>) {
+  RemoteCanvas(modifier = RemoteModifier.size(0.rdp)) {
+    for (tile in tiles) {
+      val labels: List<Pair<RemoteString, RemoteInt>> = tile.activeLabels ?: continue
+      tile.iconTint.id
+      for ((label, visibility) in labels) {
+        label.id
+        visibility.id
+      }
+    }
+  }
+}
+
+@Composable
+@RemoteComposable
+private fun RemoteTileContent(
+  tile: RemoteTileVisuals,
+  iconSize: RemoteDp,
+  onSurfaceColor: RemoteColor,
+) {
+  RemoteBasicIcon(
+    imageVector = RemoteImageVector.vectorResource(tile.iconRes),
+    contentDescription = tile.contentDescription.rs,
+    modifier = RemoteModifier.size(iconSize),
+    tint = tile.iconTint,
+  )
+  RemoteBox(modifier = RemoteModifier.height(4.rdp))
+  val activeLabels: List<Pair<RemoteString, RemoteInt>>? = tile.activeLabels
+  val staticLabelText: RemoteString? = tile.staticLabelText
+  if (activeLabels != null) {
+    RemoteBox(modifier = RemoteModifier.fillMaxWidth()) {
+      for ((label, visibility) in activeLabels) {
+        WidgetLabelText(
+          text = label,
+          color = onSurfaceColor,
+          modifier = RemoteModifier.fillMaxWidth().visibility(visibility),
+        )
+      }
+    }
+  } else if (staticLabelText != null) {
+    WidgetLabelText(text = staticLabelText, color = onSurfaceColor)
   }
 }
 

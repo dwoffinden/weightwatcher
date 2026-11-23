@@ -2,6 +2,7 @@ package dev.daw.weightwatcher
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.os.Bundle
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import dagger.hilt.android.EntryPointAccessors
@@ -20,27 +21,53 @@ class WeightGlanceWidgetReceiver : GlanceAppWidgetReceiver() {
     appWidgetIds: IntArray,
   ) {
     if (WeightGlanceWidget.useRemoteCompose()) {
-      val pendingResult: PendingResult? = goAsync()
-      CoroutineScope(Dispatchers.Default).launch {
-        try {
-          val dependencies: WeightGlanceWidget.Dependencies =
-            EntryPointAccessors.fromApplication(context)
-          updateRemoteComposeWidgets(
-            context = context,
-            appWidgetIds = appWidgetIds,
-            dataStore = dependencies.syncSettingsDataStore(),
-            isSyncRunning = WeightWorker.isSyncing(context).first(),
-          )
-        } finally {
-          WeightWorker.enqueuePeriodicWork(context)
-          WeightWorker.enqueueOneTimeWork(context)
-          pendingResult?.finish()
-        }
-      }
+      updateRemoteComposeAsync(context, appWidgetIds, enqueueSync = true)
       return
     }
     super.onUpdate(context, appWidgetManager, appWidgetIds)
     WeightWorker.enqueuePeriodicWork(context)
     WeightWorker.enqueueOneTimeWork(context)
+  }
+
+  override fun onAppWidgetOptionsChanged(
+    context: Context,
+    appWidgetManager: AppWidgetManager,
+    appWidgetId: Int,
+    newOptions: Bundle,
+  ) {
+    if (WeightGlanceWidget.useRemoteCompose()) {
+      updateRemoteComposeAsync(context, intArrayOf(appWidgetId), enqueueSync = false)
+      return
+    }
+    super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+  }
+
+  private fun updateRemoteComposeAsync(
+    context: Context,
+    appWidgetIds: IntArray,
+    enqueueSync: Boolean,
+  ) {
+    if (!WeightGlanceWidget.useRemoteCompose()) {
+      return
+    }
+    val pendingResult: PendingResult? = goAsync()
+    CoroutineScope(Dispatchers.Default).launch {
+      try {
+        val dependencies: WeightGlanceWidget.Dependencies =
+          EntryPointAccessors.fromApplication(context)
+        updateRemoteComposeWidgets(
+          context = context,
+          appWidgetIds = appWidgetIds,
+          dataStore = dependencies.syncSettingsDataStore(),
+          isSyncRunning = WeightWorker.isSyncing(context).first(),
+        )
+      } finally {
+        if (enqueueSync) {
+          WeightWorker.enqueuePeriodicWork(context)
+          WeightWorker.enqueueOneTimeWork(context)
+        }
+        pendingResult?.finish()
+      }
+    }
   }
 }

@@ -4,8 +4,11 @@ import android.app.Application
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.test.core.app.ApplicationProvider
+import com.google.common.collect.ImmutableSet
 import com.google.common.truth.Truth.assertThat
 import java.io.File
 import kotlinx.coroutines.flow.first
@@ -44,49 +47,74 @@ class WeightGlanceWidgetStateTest {
   }
 
   @Test
-  fun getWidgetDataType_unconfiguredWidget_returnsNull() =
+  fun getWidgetDataTypes_unconfiguredWidget_returnsEmpty() =
     runBlocking<Unit> {
       val appWidgetId: Int = placeWidget(context)
       val glanceId = GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId)
 
-      assertThat(WeightGlanceWidget.getWidgetDataType(context, glanceId)).isNull()
+      assertThat(WeightGlanceWidget.getWidgetDataTypes(context, glanceId)).isEmpty()
     }
 
   @Test
-  fun getWidgetDataType_afterSetWidgetDataType_returnsIt() =
+  fun getWidgetDataTypes_afterSetWidgetDataTypes_preservesOrder() =
     runBlocking<Unit> {
       val appWidgetId: Int = placeWidget(context)
       val glanceId = GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId)
 
-      WeightGlanceWidget.setWidgetDataType(context, glanceId, DataType.SLEEP)
+      WeightGlanceWidget.setWidgetDataTypes(
+        context,
+        glanceId,
+        ImmutableSet.of(DataType.SLEEP, DataType.WEIGHT, DataType.STEPS),
+      )
 
-      assertThat(WeightGlanceWidget.getWidgetDataType(context, glanceId)).isEqualTo(DataType.SLEEP)
+      assertThat(WeightGlanceWidget.getWidgetDataTypes(context, glanceId))
+        .containsExactly(DataType.SLEEP, DataType.WEIGHT, DataType.STEPS)
+        .inOrder()
     }
 
   @Test
-  fun configure_placedWidget_storesDataType() =
+  fun getWidgetDataTypes_legacySingleIntPreference_readsAsSingleElementList() =
+    runBlocking<Unit> {
+      val appWidgetId: Int = placeWidget(context)
+      val glanceId = GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId)
+      updateAppWidgetState(context, glanceId) { prefs ->
+        prefs[intPreferencesKey("data_type")] = DataType.HEART_RATE.proto.number
+      }
+
+      assertThat(WeightGlanceWidget.getWidgetDataTypes(context, glanceId))
+        .containsExactly(DataType.HEART_RATE)
+    }
+
+  @Test
+  fun configure_placedWidget_storesMultipleDataTypesInOrder() =
     runBlocking<Unit> {
       val appWidgetId: Int = placeWidget(context)
 
-      widget.configure(context, appWidgetId, DataType.BLOOD_PRESSURE)
+      widget.configure(
+        context,
+        appWidgetId,
+        ImmutableSet.of(DataType.BLOOD_PRESSURE, DataType.STEPS),
+      )
 
       val glanceId = GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId)
-      assertThat(WeightGlanceWidget.getWidgetDataType(context, glanceId))
-        .isEqualTo(DataType.BLOOD_PRESSURE)
+      assertThat(WeightGlanceWidget.getWidgetDataTypes(context, glanceId))
+        .containsExactly(DataType.BLOOD_PRESSURE, DataType.STEPS)
+        .inOrder()
     }
 
   @Test
-  fun getActiveDataTypes_mixedWidgets_returnsConfiguredTypesOnly() =
+  fun getActiveDataTypes_mixedWidgets_returnsUnionOfConfiguredTypes() =
     runBlocking<Unit> {
-      val stepsWidgetId: Int = placeWidget(context)
+      val multiWidgetId: Int = placeWidget(context)
       val sleepWidgetId: Int = placeWidget(context)
       placeWidget(context)
-      widget.configure(context, stepsWidgetId, DataType.STEPS)
+      widget.configure(context, multiWidgetId, ImmutableSet.of(DataType.STEPS, DataType.HEART_RATE))
       widget.configure(context, sleepWidgetId, DataType.SLEEP)
 
       val activeDataTypes: Set<DataType> = WeightGlanceWidget.getActiveDataTypes(context)
 
-      assertThat(activeDataTypes).containsExactly(DataType.STEPS, DataType.SLEEP)
+      assertThat(activeDataTypes)
+        .containsExactly(DataType.STEPS, DataType.HEART_RATE, DataType.SLEEP)
     }
 
   @Test
@@ -121,6 +149,6 @@ class WeightGlanceWidgetStateTest {
       widget.migrateLegacyWidgets(context, dataStore)
 
       val glanceId = GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId)
-      assertThat(WeightGlanceWidget.getWidgetDataType(context, glanceId)).isNull()
+      assertThat(WeightGlanceWidget.getWidgetDataTypes(context, glanceId)).isEmpty()
     }
 }

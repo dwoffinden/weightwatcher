@@ -19,6 +19,7 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.google.common.collect.ImmutableSet
 import com.google.common.truth.Truth.assertThat
 import dev.daw.weightwatcher.DataType
 import dev.daw.weightwatcher.DataTypeState.Status
@@ -79,7 +80,7 @@ class RemoteComposeWidgetTest {
     runBlocking<Unit> {
       val appWidgetId: Int = placeWidget(context)
       val glanceId = GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId)
-      WeightGlanceWidget.setWidgetDataType(context, glanceId, DataType.WEIGHT)
+      WeightGlanceWidget.setWidgetDataTypes(context, glanceId, ImmutableSet.of(DataType.WEIGHT))
       dataStore.updateData {
         syncSettings {
           setStatesByType(
@@ -123,13 +124,13 @@ class RemoteComposeWidgetTest {
         buildRemoteComposeWidgetViews(
           context = context,
           appWidgetId = 42,
-          dataType = DataType.WEIGHT,
+          dataTypes = ImmutableSet.of(DataType.WEIGHT),
           settings = settings,
           isSyncRunning = false,
         )
       val view: View = inflateAndDrawRemoteViews(remoteViews)
 
-      tapCenter(view)
+      tapAt(view, x = WIDGET_SIZE_PX / 2f, y = WIDGET_SIZE_PX / 2f)
 
       val workInfos: List<WorkInfo> =
         WorkManager.getInstance(context)
@@ -148,17 +149,58 @@ class RemoteComposeWidgetTest {
         buildRemoteComposeWidgetViews(
           context = context,
           appWidgetId = 42,
-          dataType = DataType.SLEEP,
+          dataTypes = ImmutableSet.of(DataType.SLEEP),
           settings = settings,
           isSyncRunning = false,
         )
       val view: View = inflateAndDrawRemoteViews(remoteViews)
 
-      tapCenter(view)
+      tapAt(view, x = WIDGET_SIZE_PX / 2f, y = WIDGET_SIZE_PX / 2f)
 
       val startedIntent: Intent? = shadowOf(application).nextStartedActivity
       assertThat(startedIntent?.component?.className).isEqualTo(MainActivity::class.java.name)
       assertThat(startedIntent?.getDataType()).isEqualTo(DataType.SLEEP)
+    }
+
+  @Test
+  fun buildRemoteComposeWidgetViews_multiItemWidget_routesPerTileTapsIndependently() =
+    runBlocking<Unit> {
+      val settings: SyncSettings = syncSettings {
+        setStatesByType(
+          mapOf(
+            DataType.WEIGHT to
+              dataTypeState {
+                status = Status.OK
+                lastRecordTime = Instant.parse("2026-01-01T00:00:00Z").toTimestamp()
+              },
+            DataType.SLEEP to dataTypeState { status = Status.NO_PERMISSIONS },
+          )
+        )
+      }
+      val remoteViews: RemoteViews =
+        buildRemoteComposeWidgetViews(
+          context = context,
+          appWidgetId = 42,
+          dataTypes = ImmutableSet.of(DataType.WEIGHT, DataType.SLEEP),
+          settings = settings,
+          isSyncRunning = false,
+        )
+      val widthPx = WIDGET_SIZE_PX * 2
+      val view: View = inflateAndDrawRemoteViews(remoteViews, widthPx = widthPx)
+
+      // Tap right tile (Unauthorized Sleep) -> opens MainActivity for Sleep.
+      tapAt(view, x = widthPx * 0.75f, y = WIDGET_SIZE_PX / 2f)
+      val startedIntent: Intent? = shadowOf(application).nextStartedActivity
+      assertThat(startedIntent?.component?.className).isEqualTo(MainActivity::class.java.name)
+      assertThat(startedIntent?.getDataType()).isEqualTo(DataType.SLEEP)
+
+      // Tap left tile (Active Weight) -> enqueues one-time sync.
+      tapAt(view, x = widthPx * 0.25f, y = WIDGET_SIZE_PX / 2f)
+      val workInfos: List<WorkInfo> =
+        WorkManager.getInstance(context)
+          .getWorkInfosForUniqueWork(WeightWorker.ONE_TIME_WORK_NAME)
+          .get()
+      assertThat(workInfos).isNotEmpty()
     }
 
   @Test
@@ -168,13 +210,13 @@ class RemoteComposeWidgetTest {
         buildRemoteComposeWidgetViews(
           context = context,
           appWidgetId = 77,
-          dataType = null,
+          dataTypes = ImmutableSet.of(),
           settings = SyncSettings.getDefaultInstance(),
           isSyncRunning = false,
         )
       val view: View = inflateAndDrawRemoteViews(remoteViews)
 
-      tapCenter(view)
+      tapAt(view, x = WIDGET_SIZE_PX / 2f, y = WIDGET_SIZE_PX / 2f)
 
       val startedIntent: Intent? = shadowOf(application).nextStartedActivity
       assertThat(startedIntent?.component?.className).isEqualTo(MainActivity::class.java.name)
@@ -198,28 +240,30 @@ class RemoteComposeWidgetTest {
     assertThat(workInfos).isNotEmpty()
   }
 
-  private fun inflateAndDrawRemoteViews(remoteViews: RemoteViews): View {
+  private fun inflateAndDrawRemoteViews(
+    remoteViews: RemoteViews,
+    widthPx: Int = WIDGET_SIZE_PX,
+    heightPx: Int = WIDGET_SIZE_PX,
+  ): View {
     val activity: Activity = Robolectric.buildActivity(Activity::class.java).setup().get()
     val container = FrameLayout(activity)
     activity.setContentView(container)
     val view: View = remoteViews.apply(activity, container)
     container.addView(view)
-    val spec: Int = MeasureSpec.makeMeasureSpec(WIDGET_SIZE_PX, MeasureSpec.EXACTLY)
-    container.measure(spec, spec)
-    container.layout(0, 0, WIDGET_SIZE_PX, WIDGET_SIZE_PX)
-    val bitmap: Bitmap =
-      Bitmap.createBitmap(WIDGET_SIZE_PX, WIDGET_SIZE_PX, Bitmap.Config.ARGB_8888)
+    container.measure(
+      MeasureSpec.makeMeasureSpec(widthPx, MeasureSpec.EXACTLY),
+      MeasureSpec.makeMeasureSpec(heightPx, MeasureSpec.EXACTLY),
+    )
+    container.layout(0, 0, widthPx, heightPx)
+    val bitmap: Bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
     container.draw(Canvas(bitmap))
     return view
   }
 
-  private fun tapCenter(view: View) {
-    val centerX: Float = WIDGET_SIZE_PX / 2f
-    val centerY: Float = WIDGET_SIZE_PX / 2f
+  private fun tapAt(view: View, x: Float, y: Float) {
     val downTime: Long = SystemClock.uptimeMillis()
-    val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, centerX, centerY, 0)
-    val up =
-      MotionEvent.obtain(downTime, downTime + 10L, MotionEvent.ACTION_UP, centerX, centerY, 0)
+    val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0)
+    val up = MotionEvent.obtain(downTime, downTime + 10L, MotionEvent.ACTION_UP, x, y, 0)
     try {
       view.dispatchTouchEvent(down)
       view.dispatchTouchEvent(up)

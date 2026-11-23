@@ -11,10 +11,12 @@ import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.appwidget.updateAll
 import androidx.glance.state.PreferencesGlanceStateDefinition
+import com.google.common.collect.ImmutableSet
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -64,20 +66,25 @@ class WeightGlanceWidget : GlanceAppWidget() {
     internal fun isSyncing(status: Status, isSyncRunning: Boolean): Boolean =
       isSyncRunning || status == Status.STATUS_UNSPECIFIED
 
-    fun previewPreferences(dataType: DataType): Preferences = dataTypePreferencesOf(dataType)
+    fun previewPreferences(dataTypes: ImmutableSet<DataType>): Preferences =
+      widgetDataTypesPreferencesOf(dataTypes)
 
-    /** Returns the widget's data type, or `null` if it hasn't been configured yet. */
-    suspend fun getWidgetDataType(context: Context, glanceId: GlanceId): DataType? =
-      getAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId).getDataType()
+    /** Returns the widget's configured data types in display order, or empty if unconfigured. */
+    suspend fun getWidgetDataTypes(context: Context, glanceId: GlanceId): ImmutableSet<DataType> =
+      getAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId).getWidgetDataTypes()
 
-    suspend fun setWidgetDataType(context: Context, glanceId: GlanceId, dataType: DataType) {
-      updateAppWidgetState(context, glanceId) { prefs -> prefs.setDataType(dataType) }
+    suspend fun setWidgetDataTypes(
+      context: Context,
+      glanceId: GlanceId,
+      dataTypes: ImmutableSet<DataType>,
+    ) {
+      updateAppWidgetState(context, glanceId) { prefs -> prefs.setWidgetDataTypes(dataTypes) }
     }
 
-    /** Returns the data types of all configured widgets. */
+    /** Returns the data types tracked by any configured widget. */
     suspend fun getActiveDataTypes(context: Context): Set<DataType> =
-      getPlacedGlanceIds(context).mapNotNullTo(mutableSetOf()) { glanceId ->
-        getWidgetDataType(context, glanceId)
+      getPlacedGlanceIds(context).flatMapTo(mutableSetOf()) { glanceId ->
+        getWidgetDataTypes(context, glanceId)
       }
 
     @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.BAKLAVA)
@@ -103,6 +110,8 @@ class WeightGlanceWidget : GlanceAppWidget() {
     }
   }
 
+  override val sizeMode: SizeMode = SizeMode.Exact
+
   /**
    * Updates all placed widgets. On Android 16+, pushes RemoteCompose directly without Glance's
    * `SessionWorker`.
@@ -125,13 +134,19 @@ class WeightGlanceWidget : GlanceAppWidget() {
     updateAll(context)
   }
 
-  /** Makes widget [appWidgetId] show [dataType], and syncs it. */
-  suspend fun configure(context: Context, appWidgetId: Int, dataType: DataType) {
+  /** Makes widget [appWidgetId] show [dataTypes] in order, and syncs them. */
+  suspend fun configure(context: Context, appWidgetId: Int, dataTypes: ImmutableSet<DataType>) {
+    require(dataTypes.isNotEmpty()) { "Widget must track at least one data type" }
     val glanceId = GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId)
-    setWidgetDataType(context, glanceId, dataType)
+    setWidgetDataTypes(context, glanceId, dataTypes)
     updateWidget(context, appWidgetId, glanceId)
     WeightWorker.enqueuePeriodicWork(context)
     WeightWorker.enqueueOneTimeWork(context)
+  }
+
+  /** Makes widget [appWidgetId] show [dataType], and syncs it. */
+  suspend fun configure(context: Context, appWidgetId: Int, dataType: DataType) {
+    configure(context, appWidgetId, ImmutableSet.of(dataType))
   }
 
   /**
@@ -149,8 +164,8 @@ class WeightGlanceWidget : GlanceAppWidget() {
     var migratedAny = false
     for (appWidgetId in getPlacedAppWidgetIds(context)) {
       val glanceId = glanceAppWidgetManager.getGlanceIdBy(appWidgetId)
-      if (getWidgetDataType(context, glanceId) == null) {
-        setWidgetDataType(context, glanceId, DataType.WEIGHT)
+      if (getWidgetDataTypes(context, glanceId).isEmpty()) {
+        setWidgetDataTypes(context, glanceId, ImmutableSet.of(DataType.WEIGHT))
         updateWidget(context, appWidgetId, glanceId, dataStore)
         migratedAny = true
       }

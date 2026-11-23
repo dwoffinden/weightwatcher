@@ -28,11 +28,13 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -55,12 +57,14 @@ import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
+import com.google.common.collect.ImmutableSet
 import dagger.hilt.android.AndroidEntryPoint
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import javax.inject.Inject
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
@@ -76,6 +80,25 @@ class MainActivity : ComponentActivity() {
     private val TOP_SCREEN_PADDING: Dp = 64.dp
     private val BOTTOM_SCREEN_PADDING: Dp = 32.dp
     private val SCROLL_FADE_HEIGHT: Dp = 32.dp
+    private const val WIDGET_HORIZONTAL_PADDING_DP = 8
+    private const val MIN_SLOT_WIDTH_DP = 30
+    private const val MIN_WIDGET_SLOTS = 2
+    private const val TYPICAL_CELL_PITCH_DP = 86
+    private const val TYPICAL_CELL_GAP_DP = 13
+
+    internal fun maxTypesForWidthDp(widthDp: Int): Int =
+      ((widthDp - WIDGET_HORIZONTAL_PADDING_DP) / MIN_SLOT_WIDTH_DP).coerceIn(
+        MIN_WIDGET_SLOTS,
+        DataType.entries.size,
+      )
+
+    internal fun suggestedWidthCells(typeCount: Int): Int {
+      val requiredWidthDp: Int =
+        typeCount.coerceAtLeast(1) * MIN_SLOT_WIDTH_DP + WIDGET_HORIZONTAL_PADDING_DP
+      return ((requiredWidthDp + TYPICAL_CELL_GAP_DP + TYPICAL_CELL_PITCH_DP - 1) /
+          TYPICAL_CELL_PITCH_DP)
+        .coerceAtLeast(1)
+    }
   }
 
   @field:Inject lateinit var healthConnectAccess: HealthConnectAccess
@@ -97,33 +120,57 @@ class MainActivity : ComponentActivity() {
       )
     }
 
-    val initialDataType: DataType = intent.getDataType() ?: DataType.WEIGHT
+    val initialDataTypes: ImmutableSet<DataType> =
+      intent.getWidgetDataTypes().ifEmpty { ImmutableSet.of(DataType.WEIGHT) }
 
     setContent {
-      WeightWatcherApp(configureWidgetId = configureWidgetId, initialDataType = initialDataType)
+      WeightWatcherApp(configureWidgetId = configureWidgetId, initialDataTypes = initialDataTypes)
     }
   }
 
   @Composable
   fun WeightWatcherApp(
     configureWidgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID,
-    initialDataType: DataType = DataType.WEIGHT,
+    initialDataTypes: ImmutableSet<DataType> = ImmutableSet.of(DataType.WEIGHT),
   ) {
     val isConfigureMode: Boolean = configureWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
-    var selectedDataType: DataType by remember { mutableStateOf(initialDataType) }
+    val appWidgetManager = AppWidgetManager.getInstance(this@MainActivity)
+    val maxDataTypes: Int? =
+      if (isConfigureMode) {
+        val widthDp: Int =
+          appWidgetManager
+            .getAppWidgetOptions(configureWidgetId)
+            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+        if (widthDp > 0) maxTypesForWidthDp(widthDp) else null
+      } else {
+        null
+      }
+    var selectedDataTypes: ImmutableSet<DataType> by remember { mutableStateOf(initialDataTypes) }
     var grantedPermissions: Set<String> by remember { mutableStateOf(emptySet()) }
-    val hasPermissions: Boolean =
-      grantedPermissions.containsAll(SyncManager.requiredPermissionsFor(selectedDataType))
+    val missingPermissionTypes: List<DataType> = selectedDataTypes.filter { dataType ->
+      !grantedPermissions.containsAll(SyncManager.requiredPermissionsFor(dataType))
+    }
+    val hasPermissions: Boolean = selectedDataTypes.isNotEmpty() && missingPermissionTypes.isEmpty()
+    val singleSelectedType: DataType? = selectedDataTypes.singleOrNull()
     val lastRecordTime: Instant? by
-      remember(selectedDataType) { syncManager.lastRecordTime(selectedDataType) }
+      remember(singleSelectedType) {
+          if (singleSelectedType != null) {
+            syncManager.lastRecordTime(singleSelectedType)
+          } else {
+            flowOf(null)
+          }
+        }
         .collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
     // Null until loaded.
     var sdkStatus: Int? by remember { mutableStateOf(null) }
 
-    fun saveConfiguredWidgetAndFinish(dataType: DataType) {
+    fun saveConfiguredWidgetAndFinish(dataTypes: ImmutableSet<DataType>) {
+      if (dataTypes.isEmpty()) {
+        return
+      }
       coroutineScope.launch {
-        glanceAppWidget.configure(this@MainActivity, configureWidgetId, dataType)
+        glanceAppWidget.configure(this@MainActivity, configureWidgetId, dataTypes)
         setResult(
           RESULT_OK,
           Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, configureWidgetId),
@@ -137,41 +184,43 @@ class MainActivity : ComponentActivity() {
     val requestPermissions =
       rememberLauncherForActivityResult(requestPermissionActivityContract) { granted ->
         Log.i("MainActivity", "Permissions request result: $granted")
-        val updatedPermissions: Set<String> = grantedPermissions + granted
-        grantedPermissions = updatedPermissions
-        if (updatedPermissions.containsAll(SyncManager.requiredPermissionsFor(selectedDataType))) {
-          Log.i("MainActivity", "Permissions granted for $selectedDataType!")
-          if (isConfigureMode) {
-            saveConfiguredWidgetAndFinish(selectedDataType)
-          }
-        }
+        grantedPermissions = grantedPermissions + granted
       }
 
-    fun onDataTypeSelected(dataType: DataType) {
-      selectedDataType = dataType
-      if (
-        isConfigureMode &&
-          grantedPermissions.containsAll(SyncManager.requiredPermissionsFor(dataType))
-      ) {
-        saveConfiguredWidgetAndFinish(dataType)
-      }
+    fun onToggleDataType(dataType: DataType) {
+      selectedDataTypes =
+        if (dataType in selectedDataTypes) {
+          ImmutableSet.copyOf(selectedDataTypes - dataType)
+        } else if (maxDataTypes == null || selectedDataTypes.size < maxDataTypes) {
+          ImmutableSet.copyOf(selectedDataTypes + dataType)
+        } else {
+          selectedDataTypes
+        }
+    }
+
+    fun onRemoveSlot(dataType: DataType) {
+      selectedDataTypes = ImmutableSet.copyOf(selectedDataTypes - dataType)
     }
 
     fun onPinWidget() {
-      val chosenType: DataType = selectedDataType
+      val chosenTypes: ImmutableSet<DataType> = selectedDataTypes
+      if (chosenTypes.isEmpty()) {
+        return
+      }
       coroutineScope.launch {
         val manager = GlanceAppWidgetManager(this@MainActivity)
         manager.requestPinGlanceAppWidget(
           receiver = WeightGlanceWidgetReceiver::class.java,
           preview = glanceAppWidget,
-          previewState = WeightGlanceWidget.previewPreferences(chosenType),
-          successCallback = WidgetPinReceiver.createSuccessCallback(this@MainActivity, chosenType),
+          previewState = WeightGlanceWidget.previewPreferences(chosenTypes),
+          successCallback = WidgetPinReceiver.createSuccessCallback(this@MainActivity, chosenTypes),
         )
       }
     }
 
     fun onGrantPermissions() {
-      val permissionsToRequest: Set<String> = SyncManager.requiredPermissionsFor(selectedDataType)
+      val permissionsToRequest: Set<String> =
+        missingPermissionTypes.flatMapTo(mutableSetOf()) { SyncManager.requiredPermissionsFor(it) }
       Log.i("MainActivity", "Grant Permissions button clicked. Requesting: $permissionsToRequest")
       requestPermissions.launch(permissionsToRequest)
     }
@@ -190,11 +239,14 @@ class MainActivity : ComponentActivity() {
       if (isConfigureMode) {
         val manager = GlanceAppWidgetManager(this@MainActivity)
         val glanceId = runCatching { manager.getGlanceIdBy(configureWidgetId) }.getOrNull()
-        val widgetDataType: DataType? = glanceId?.let {
-          WeightGlanceWidget.getWidgetDataType(this@MainActivity, it)
-        }
-        if (widgetDataType != null) {
-          selectedDataType = widgetDataType
+        val widgetDataTypes: ImmutableSet<DataType> =
+          if (glanceId != null) {
+            WeightGlanceWidget.getWidgetDataTypes(this@MainActivity, glanceId)
+          } else {
+            ImmutableSet.of()
+          }
+        if (widgetDataTypes.isNotEmpty()) {
+          selectedDataTypes = widgetDataTypes
         }
       }
     }
@@ -242,8 +294,7 @@ class MainActivity : ComponentActivity() {
               }
             }
           } else {
-            val isPinSupported: Boolean =
-              AppWidgetManager.getInstance(this@MainActivity).isRequestPinAppWidgetSupported
+            val isPinSupported: Boolean = appWidgetManager.isRequestPinAppWidgetSupported
             if (maxHeight >= MIN_PINNED_FOOTER_HEIGHT) {
               val scrollState = rememberScrollState()
               val backgroundColor: Color = MaterialTheme.colorScheme.background
@@ -268,8 +319,10 @@ class MainActivity : ComponentActivity() {
                     verticalArrangement = Arrangement.Center,
                   ) {
                     DataTypeSelectionSection(
-                      selectedDataType = selectedDataType,
-                      onSelectDataType = ::onDataTypeSelected,
+                      selectedDataTypes = selectedDataTypes,
+                      maxDataTypes = maxDataTypes,
+                      onToggleDataType = ::onToggleDataType,
+                      onRemoveSlot = ::onRemoveSlot,
                     )
                   }
                   if (scrollState.canScrollForward) {
@@ -303,11 +356,14 @@ class MainActivity : ComponentActivity() {
                   horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                   SetupActionsSection(
-                    selectedDataType = selectedDataType,
+                    selectedDataTypes = selectedDataTypes,
+                    missingPermissionTypes = missingPermissionTypes,
                     hasPermissions = hasPermissions,
                     lastRecordTime = lastRecordTime,
                     isConfigureMode = isConfigureMode,
+                    maxDataTypes = maxDataTypes,
                     isPinSupported = isPinSupported,
+                    onSaveWidget = { saveConfiguredWidgetAndFinish(selectedDataTypes) },
                     onPinWidget = ::onPinWidget,
                     onGrantPermissions = ::onGrantPermissions,
                     onOpenHealthConnect = ::onOpenHealthConnect,
@@ -330,16 +386,21 @@ class MainActivity : ComponentActivity() {
                 verticalArrangement = Arrangement.Center,
               ) {
                 DataTypeSelectionSection(
-                  selectedDataType = selectedDataType,
-                  onSelectDataType = ::onDataTypeSelected,
+                  selectedDataTypes = selectedDataTypes,
+                  maxDataTypes = maxDataTypes,
+                  onToggleDataType = ::onToggleDataType,
+                  onRemoveSlot = ::onRemoveSlot,
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 SetupActionsSection(
-                  selectedDataType = selectedDataType,
+                  selectedDataTypes = selectedDataTypes,
+                  missingPermissionTypes = missingPermissionTypes,
                   hasPermissions = hasPermissions,
                   lastRecordTime = lastRecordTime,
                   isConfigureMode = isConfigureMode,
+                  maxDataTypes = maxDataTypes,
                   isPinSupported = isPinSupported,
+                  onSaveWidget = { saveConfiguredWidgetAndFinish(selectedDataTypes) },
                   onPinWidget = ::onPinWidget,
                   onGrantPermissions = ::onGrantPermissions,
                   onOpenHealthConnect = ::onOpenHealthConnect,
@@ -355,22 +416,31 @@ class MainActivity : ComponentActivity() {
   @OptIn(ExperimentalLayoutApi::class)
   @Composable
   private fun DataTypeSelectionSection(
-    selectedDataType: DataType,
-    onSelectDataType: (DataType) -> Unit,
+    selectedDataTypes: ImmutableSet<DataType>,
+    maxDataTypes: Int?,
+    onToggleDataType: (DataType) -> Unit,
+    onRemoveSlot: (DataType) -> Unit,
   ) {
+    val isAtCap: Boolean = maxDataTypes != null && selectedDataTypes.size >= maxDataTypes
     Text("WeightWatcher Widget Setup", style = MaterialTheme.typography.headlineMedium)
-    Spacer(modifier = Modifier.height(24.dp))
-    Text("Select data type to track:", style = MaterialTheme.typography.titleMedium)
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(16.dp))
+    WidgetSlotOrderPreview(
+      selectedDataTypes = selectedDataTypes,
+      maxDataTypes = maxDataTypes,
+      onRemoveSlot = onRemoveSlot,
+    )
+    Spacer(modifier = Modifier.height(16.dp))
     FlowRow(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
       for (dataType in DataType.entries) {
+        val isSelected: Boolean = dataType in selectedDataTypes
         FilterChip(
-          selected = dataType == selectedDataType,
-          onClick = { onSelectDataType(dataType) },
+          selected = isSelected,
+          enabled = isSelected || !isAtCap,
+          onClick = { onToggleDataType(dataType) },
           label = { Text(dataType.displayName) },
           leadingIcon = {
             Icon(
@@ -384,45 +454,142 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  @OptIn(ExperimentalLayoutApi::class)
+  @Composable
+  private fun WidgetSlotOrderPreview(
+    selectedDataTypes: ImmutableSet<DataType>,
+    maxDataTypes: Int?,
+    onRemoveSlot: (DataType) -> Unit,
+  ) {
+    val headerText: String =
+      if (maxDataTypes != null) {
+        "Widget order (${selectedDataTypes.size}/$maxDataTypes)"
+      } else {
+        "Widget order (${selectedDataTypes.size})"
+      }
+    val helperText: String =
+      when {
+        selectedDataTypes.isEmpty() ->
+          "Tap data types below to add · resize widget wider to fit more"
+        selectedDataTypes.size >= DataType.entries.size ->
+          "All data types selected · tap a slot to remove"
+        maxDataTypes != null && selectedDataTypes.size >= maxDataTypes ->
+          "Widget full, resize wider for more slots"
+        else -> "Tap below to add, tap a slot to remove · resize widget wider to fit more"
+      }
+    Surface(
+      shape = RoundedCornerShape(16.dp),
+      color = MaterialTheme.colorScheme.surfaceContainer,
+      modifier = Modifier.fillMaxWidth(),
+    ) {
+      Column(
+        modifier = Modifier.padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+      ) {
+        Text(headerText, style = MaterialTheme.typography.titleSmall)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+          helperText,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (selectedDataTypes.isNotEmpty()) {
+          Spacer(modifier = Modifier.height(8.dp))
+          FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+          ) {
+            for ((index, dataType) in selectedDataTypes.withIndex()) {
+              InputChip(
+                selected = true,
+                onClick = { onRemoveSlot(dataType) },
+                label = { Text("${index + 1}. ${dataType.displayName}") },
+                leadingIcon = {
+                  Icon(
+                    painter = painterResource(dataType.iconRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                  )
+                },
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+
   @Composable
   private fun SetupActionsSection(
-    selectedDataType: DataType,
+    selectedDataTypes: ImmutableSet<DataType>,
+    missingPermissionTypes: List<DataType>,
     hasPermissions: Boolean,
     lastRecordTime: Instant?,
     isConfigureMode: Boolean,
+    maxDataTypes: Int?,
     isPinSupported: Boolean,
+    onSaveWidget: () -> Unit,
     onPinWidget: () -> Unit,
     onGrantPermissions: () -> Unit,
     onOpenHealthConnect: () -> Unit,
   ) {
-    if (hasPermissions) {
+    if (selectedDataTypes.isEmpty()) {
+      Text("Select at least one data type.")
+    } else if (hasPermissions) {
       Text("Permissions granted! 😊")
-      if (lastRecordTime != null) {
+      val singleType: DataType? = selectedDataTypes.singleOrNull()
+      if (singleType != null && lastRecordTime != null) {
         Spacer(modifier = Modifier.height(8.dp))
         val formatter = remember {
           DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM).withZone(ZoneId.systemDefault())
         }
         Text(
-          "Last ${selectedDataType.nameInSentence} log found: ${formatter.format(lastRecordTime)}",
+          "Last ${singleType.nameInSentence} log found: ${formatter.format(lastRecordTime)}",
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.secondary,
         )
       }
-      if (!isConfigureMode) {
+      val suggestedCells: Int = suggestedWidthCells(selectedDataTypes.size)
+      if (suggestedCells > 1 && (maxDataTypes == null || selectedDataTypes.size > maxDataTypes)) {
         Spacer(modifier = Modifier.height(8.dp))
-        Text("You can now add the widget to your home screen.")
+        Text(
+          "Tip: resize to ${suggestedCells}x1 on your home screen for ${selectedDataTypes.size} types.",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.secondary,
+        )
+      }
+      if (isConfigureMode) {
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+          onClick = onSaveWidget,
+          modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+        ) {
+          Text("Save Widget")
+        }
+      } else {
+        if (selectedDataTypes.size == 1) {
+          Spacer(modifier = Modifier.height(8.dp))
+          Text("You can now add the widget to your home screen.")
+        }
         if (isPinSupported) {
           Spacer(modifier = Modifier.height(16.dp))
+          val pinLabel: String =
+            if (singleType != null) {
+              "Pin ${singleType.displayName} Widget to Home Screen"
+            } else {
+              "Pin ${selectedDataTypes.size}-Type Widget to Home Screen"
+            }
           Button(
             onClick = onPinWidget,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
           ) {
-            Text("Pin ${selectedDataType.displayName} Widget to Home Screen")
+            Text(pinLabel)
           }
         }
       }
     } else {
-      Text("Need Health Connect read permissions for ${selectedDataType.nameInSentence}.")
+      val missingNames: String = missingPermissionTypes.joinToString(", ") { it.nameInSentence }
+      Text("Need Health Connect read permissions for $missingNames.")
       Spacer(modifier = Modifier.height(12.dp))
       Button(onClick = onGrantPermissions) { Text("Grant Permissions") }
     }

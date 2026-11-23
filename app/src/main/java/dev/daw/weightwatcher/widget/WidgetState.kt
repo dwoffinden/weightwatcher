@@ -1,6 +1,7 @@
 package dev.daw.weightwatcher.widget
 
 import androidx.annotation.DrawableRes
+import com.google.common.collect.ImmutableSet
 import dev.daw.weightwatcher.DataType
 import dev.daw.weightwatcher.DataTypeState
 import dev.daw.weightwatcher.DataTypeState.Status
@@ -12,7 +13,7 @@ import dev.daw.weightwatcher.stateFor
 import dev.daw.weightwatcher.toInstant
 import java.time.Instant
 
-/** Action taken when the user taps the widget. */
+/** Action taken when the user taps a widget or an individual data type tile. */
 internal sealed interface WidgetClickAction {
   data class ConfigureWidget(val appWidgetId: Int) : WidgetClickAction
 
@@ -21,19 +22,15 @@ internal sealed interface WidgetClickAction {
   data object Refresh : WidgetClickAction
 }
 
-/** Shared display and interaction state rendered by both the Glance and RemoteCompose backends. */
-internal sealed interface WidgetState {
+/** Display and interaction state for a single data type tile inside a configured widget. */
+internal sealed interface WidgetItemState {
+  val dataType: DataType
   @get:DrawableRes val iconRes: Int
   val contentDescription: String
   val clickAction: WidgetClickAction
 
-  data class Unconfigured(val appWidgetId: Int) : WidgetState {
-    override val iconRes: Int = R.drawable.ic_sync
-    override val contentDescription: String = "Setting up"
-    override val clickAction: WidgetClickAction = WidgetClickAction.ConfigureWidget(appWidgetId)
-  }
-
-  data class Syncing(val dataType: DataType, val hasPermissions: Boolean) : WidgetState {
+  data class Syncing(override val dataType: DataType, val hasPermissions: Boolean) :
+    WidgetItemState {
     override val iconRes: Int = R.drawable.ic_sync
     override val contentDescription: String = dataType.displayName
     override val clickAction: WidgetClickAction =
@@ -44,42 +41,68 @@ internal sealed interface WidgetState {
       }
   }
 
-  data class Unauthorized(val dataType: DataType) : WidgetState {
+  data class Unauthorized(override val dataType: DataType) : WidgetItemState {
     override val iconRes: Int = R.drawable.ic_warning
     override val contentDescription: String = dataType.displayName
     override val clickAction: WidgetClickAction = WidgetClickAction.RequestPermissions(dataType)
   }
 
-  data class NoRecords(val dataType: DataType) : WidgetState {
+  data class NoRecords(override val dataType: DataType) : WidgetItemState {
     override val iconRes: Int = dataType.iconRes
     override val contentDescription: String = dataType.displayName
     override val clickAction: WidgetClickAction = WidgetClickAction.Refresh
   }
 
-  data class Active(val dataType: DataType, val lastRecordTime: Instant) : WidgetState {
+  data class Active(override val dataType: DataType, val lastRecordTime: Instant) :
+    WidgetItemState {
     override val iconRes: Int = dataType.iconRes
     override val contentDescription: String = dataType.displayName
     override val clickAction: WidgetClickAction = WidgetClickAction.Refresh
   }
 }
 
+/** Shared display and interaction state rendered by both the Glance and RemoteCompose backends. */
+internal sealed interface WidgetState {
+  data class Unconfigured(val appWidgetId: Int) : WidgetState {
+    @get:DrawableRes val iconRes: Int = R.drawable.ic_sync
+    val contentDescription: String = "Setting up"
+    val clickAction: WidgetClickAction = WidgetClickAction.ConfigureWidget(appWidgetId)
+  }
+
+  data class Configured(val items: List<WidgetItemState>) : WidgetState {
+    init {
+      require(items.isNotEmpty()) { "Configured widget must have at least one item" }
+    }
+  }
+}
+
 internal fun resolveWidgetState(
   appWidgetId: Int,
-  dataType: DataType?,
+  dataTypes: ImmutableSet<DataType>,
   settings: SyncSettings,
   isSyncRunning: Boolean,
 ): WidgetState {
-  if (dataType == null) {
+  if (dataTypes.isEmpty()) {
     return WidgetState.Unconfigured(appWidgetId)
   }
+  return WidgetState.Configured(
+    items = dataTypes.map { dataType -> resolveWidgetItemState(dataType, settings, isSyncRunning) }
+  )
+}
+
+private fun resolveWidgetItemState(
+  dataType: DataType,
+  settings: SyncSettings,
+  isSyncRunning: Boolean,
+): WidgetItemState {
   val typeState: DataTypeState = settings.stateFor(dataType) ?: DataTypeState.getDefaultInstance()
   val hasPermissions: Boolean = typeState.status != Status.NO_PERMISSIONS
   val lastRecordTime: Instant? = typeState.lastRecordTimeOrNull?.toInstant()
   return when {
     WeightGlanceWidget.isSyncing(typeState.status, isSyncRunning) ->
-      WidgetState.Syncing(dataType, hasPermissions)
-    !hasPermissions -> WidgetState.Unauthorized(dataType)
-    lastRecordTime == null -> WidgetState.NoRecords(dataType)
-    else -> WidgetState.Active(dataType, lastRecordTime)
+      WidgetItemState.Syncing(dataType, hasPermissions)
+    !hasPermissions -> WidgetItemState.Unauthorized(dataType)
+    lastRecordTime == null -> WidgetItemState.NoRecords(dataType)
+    else -> WidgetItemState.Active(dataType, lastRecordTime)
   }
 }

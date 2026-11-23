@@ -26,6 +26,7 @@ import dev.daw.weightwatcher.DataType
 import dev.daw.weightwatcher.hours
 import dev.daw.weightwatcher.minutes
 import dev.daw.weightwatcher.seconds
+import dev.daw.weightwatcher.widget.WidgetItemState
 import dev.daw.weightwatcher.widget.WidgetState
 import java.io.ByteArrayInputStream
 import java.time.Clock
@@ -71,8 +72,8 @@ class RemoteWidgetCaptureTest {
       val remoteViews: RemoteViews =
         captureWidgetRemoteViews(
           context = context,
-          state = WidgetState.Active(dataType, now),
-          onClickPendingIntent = WidgetRefreshReceiver.createPendingIntent(context),
+          state = WidgetState.Configured(listOf(WidgetItemState.Active(dataType, now))),
+          pendingIntentForAction = { WidgetRefreshReceiver.createPendingIntent(context) },
         )
 
       val unparceled: RemoteViews = parcelRoundTrip(remoteViews)
@@ -91,7 +92,8 @@ class RemoteWidgetCaptureTest {
       val bytes: ByteArray =
         captureWidgetDocumentBytes(
           context = context,
-          state = WidgetState.Active(DataType.WEIGHT, lastRecordTime),
+          state =
+            WidgetState.Configured(listOf(WidgetItemState.Active(DataType.WEIGHT, lastRecordTime))),
           profile = RcPlatformProfiles.WIDGETS_V7,
         )
 
@@ -118,7 +120,10 @@ class RemoteWidgetCaptureTest {
       val bytes: ByteArray =
         captureWidgetDocumentBytes(
           context = context,
-          state = WidgetState.Syncing(DataType.WEIGHT, hasPermissions = true),
+          state =
+            WidgetState.Configured(
+              listOf(WidgetItemState.Syncing(DataType.WEIGHT, hasPermissions = true))
+            ),
         )
 
       val evaluation: DocumentEvaluation =
@@ -134,7 +139,7 @@ class RemoteWidgetCaptureTest {
       val bytes: ByteArray =
         captureWidgetDocumentBytes(
           context = context,
-          state = WidgetState.Unauthorized(DataType.WEIGHT),
+          state = WidgetState.Configured(listOf(WidgetItemState.Unauthorized(DataType.WEIGHT))),
         )
 
       val evaluation: DocumentEvaluation =
@@ -149,13 +154,41 @@ class RemoteWidgetCaptureTest {
       val bytes: ByteArray =
         captureWidgetDocumentBytes(
           context = context,
-          state = WidgetState.NoRecords(DataType.WEIGHT),
+          state = WidgetState.Configured(listOf(WidgetItemState.NoRecords(DataType.WEIGHT))),
         )
 
       val evaluation: DocumentEvaluation =
         evaluateDocument(bytes = bytes, now = Instant.parse("2026-01-01T00:00:00Z"))
 
       assertThat(evaluation.renderedTexts).containsExactly("None")
+    }
+
+  @Test
+  fun captureWidgetDocumentBytes_multipleItems_rendersIndependentStalenessAndTints() =
+    runBlocking<Unit> {
+      val now = Instant.parse("2026-01-02T12:00:00Z")
+      val bytes: ByteArray =
+        captureWidgetDocumentBytes(
+          context = context,
+          state =
+            WidgetState.Configured(
+              listOf(
+                WidgetItemState.Active(DataType.WEIGHT, lastRecordTime = now - 20.minutes),
+                WidgetItemState.Active(DataType.STEPS, lastRecordTime = now - 24.hours),
+                WidgetItemState.Unauthorized(DataType.SLEEP),
+              )
+            ),
+        )
+
+      val evaluation: DocumentEvaluation = evaluateDocument(bytes = bytes, now = now)
+
+      val primaryColor: Int = context.getColor(android.R.color.system_primary_light)
+      val errorColor: Int = context.getColor(android.R.color.system_error_light)
+      assertThat(evaluation.renderedTexts).containsExactly("20m", "24h", "Auth").inOrder()
+      assertThat(evaluation.bitmap.containsColor(primaryColor, yRange = 0 until WIDGET_SIZE_PX / 2))
+        .isTrue()
+      assertThat(evaluation.bitmap.containsColor(errorColor, yRange = 0 until WIDGET_SIZE_PX / 2))
+        .isTrue()
     }
 
   @Test
@@ -170,7 +203,8 @@ class RemoteWidgetCaptureTest {
       val bytes: ByteArray =
         captureWidgetDocumentBytes(
           context = context,
-          state = WidgetState.Active(DataType.WEIGHT, lastRecordTime),
+          state =
+            WidgetState.Configured(listOf(WidgetItemState.Active(DataType.WEIGHT, lastRecordTime))),
         )
 
       val evaluation: DocumentEvaluation =
@@ -205,7 +239,8 @@ class RemoteWidgetCaptureTest {
       val bytes: ByteArray =
         captureWidgetDocumentBytes(
           context = context,
-          state = WidgetState.Active(DataType.WEIGHT, lastRecordTime),
+          state =
+            WidgetState.Configured(listOf(WidgetItemState.Active(DataType.WEIGHT, lastRecordTime))),
         )
 
       val evaluation: DocumentEvaluation =
@@ -221,7 +256,8 @@ class RemoteWidgetCaptureTest {
       val bytes: ByteArray =
         captureWidgetDocumentBytes(
           context = context,
-          state = WidgetState.Active(DataType.WEIGHT, lastRecordTime),
+          state =
+            WidgetState.Configured(listOf(WidgetItemState.Active(DataType.WEIGHT, lastRecordTime))),
         )
 
       val atThreshold: DocumentEvaluation =

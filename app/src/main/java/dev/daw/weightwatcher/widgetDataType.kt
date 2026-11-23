@@ -3,29 +3,45 @@ package dev.daw.weightwatcher
 import android.content.Intent
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.byteArrayPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
+import com.google.common.collect.ImmutableSet
 
 private const val EXTRA_DATA_TYPE = "dev.daw.weightwatcher.EXTRA_DATA_TYPE"
-private val DATA_TYPE_PREF_KEY: Preferences.Key<Int> = intPreferencesKey("data_type")
+private const val EXTRA_WIDGET_CONFIG = "dev.daw.weightwatcher.EXTRA_WIDGET_CONFIG"
+private val WIDGET_CONFIG_PREF_KEY: Preferences.Key<ByteArray> =
+  byteArrayPreferencesKey("widget_config")
+private val LEGACY_DATA_TYPE_PREF_KEY: Preferences.Key<Int> = intPreferencesKey("data_type")
 private val EXTRA_DATA_TYPE_KEY: ActionParameters.Key<Int> = ActionParameters.Key(EXTRA_DATA_TYPE)
 
 /**
- * Persisted integer IDs for Android/Glance key-value stores ([Preferences], [Intent], and
+ * Persisted encodings for Android/Glance key-value stores ([Preferences], [Intent], and
  * [ActionParameters]) that don't take custom enums directly.
+ *
+ * Ordered multi-type widget selections are serialized as a [WidgetConfig] proto [ByteArray], with
+ * read fallback to the legacy single-type `data_type` integer preference for existing widgets.
  */
-private val DATA_TYPES_BY_NUMBER: Map<Int, DataType> =
-  DataType.entries.associateBy { it.proto.number }
+// TODO: Consider migrating to a custom GlanceStateDefinition<WidgetConfig> (pure Proto DataStore
+// per widget) once existing widgets no longer need zero-migration fallback from legacy "data_type"
+// Preferences files.
+internal fun widgetDataTypesPreferencesOf(dataTypes: ImmutableSet<DataType>): Preferences =
+  preferencesOf(WIDGET_CONFIG_PREF_KEY to encodeWidgetConfig(dataTypes))
 
-internal fun dataTypePreferencesOf(dataType: DataType): Preferences =
-  preferencesOf(DATA_TYPE_PREF_KEY to dataType.toNumber())
+internal fun Preferences.getWidgetDataTypes(): ImmutableSet<DataType> {
+  val configBytes: ByteArray? = this[WIDGET_CONFIG_PREF_KEY]
+  if (configBytes != null) {
+    return decodeWidgetConfig(configBytes)
+  }
+  val legacyType: DataType? = dataTypeFromNumber(this[LEGACY_DATA_TYPE_PREF_KEY])
+  return if (legacyType != null) ImmutableSet.of(legacyType) else ImmutableSet.of()
+}
 
-internal fun Preferences.getDataType(): DataType? = dataTypeFromNumber(this[DATA_TYPE_PREF_KEY])
-
-internal fun MutablePreferences.setDataType(dataType: DataType) {
-  this[DATA_TYPE_PREF_KEY] = dataType.toNumber()
+internal fun MutablePreferences.setWidgetDataTypes(dataTypes: ImmutableSet<DataType>) {
+  this[WIDGET_CONFIG_PREF_KEY] = encodeWidgetConfig(dataTypes)
+  remove(LEGACY_DATA_TYPE_PREF_KEY)
 }
 
 internal fun dataTypeActionParameters(dataType: DataType): ActionParameters =
@@ -36,6 +52,34 @@ internal fun Intent.putDataType(dataType: DataType): Intent =
 
 internal fun Intent.getDataType(): DataType? = dataTypeFromNumber(getIntExtra(EXTRA_DATA_TYPE, 0))
 
+internal fun Intent.putWidgetDataTypes(dataTypes: ImmutableSet<DataType>): Intent =
+  putExtra(EXTRA_WIDGET_CONFIG, encodeWidgetConfig(dataTypes))
+
+internal fun Intent.getWidgetDataTypes(): ImmutableSet<DataType> {
+  val configBytes: ByteArray? = getByteArrayExtra(EXTRA_WIDGET_CONFIG)
+  if (configBytes != null) {
+    return decodeWidgetConfig(configBytes)
+  }
+  val singleType: DataType? = getDataType()
+  return if (singleType != null) ImmutableSet.of(singleType) else ImmutableSet.of()
+}
+
+private fun encodeWidgetConfig(dataTypes: ImmutableSet<DataType>): ByteArray =
+  widgetConfig { this.dataTypes += dataTypes.map { it.proto } }.toByteArray()
+
+private fun decodeWidgetConfig(bytes: ByteArray): ImmutableSet<DataType> {
+  val builder = ImmutableSet.builder<DataType>()
+  for (protoType in
+    WidgetConfig.parser().parseOr(bytes) { WidgetConfig.getDefaultInstance() }.dataTypesList) {
+    val dataType: DataType? = DataType.fromProto(protoType)
+    if (dataType != null) {
+      builder.add(dataType)
+    }
+  }
+  return builder.build()
+}
+
 private fun DataType.toNumber(): Int = proto.number
 
-private fun dataTypeFromNumber(number: Int?): DataType? = DATA_TYPES_BY_NUMBER[number]
+private fun dataTypeFromNumber(number: Int?): DataType? =
+  if (number != null) SyncSettings.DataType.forNumber(number)?.let(DataType::fromProto) else null

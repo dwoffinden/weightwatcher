@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.google.common.collect.ImmutableSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,15 +24,15 @@ class WidgetPinReceiver : BroadcastReceiver() {
      * Returns the callback for [AppWidgetManager.requestPinAppWidget], which the launcher fills in
      * with [AppWidgetManager.EXTRA_APPWIDGET_ID] once the widget is placed.
      */
-    fun createSuccessCallback(context: Context, dataType: DataType): PendingIntent {
-      val intent = Intent(context, WidgetPinReceiver::class.java).putDataType(dataType)
+    fun createSuccessCallback(context: Context, dataTypes: ImmutableSet<DataType>): PendingIntent {
+      val intent = Intent(context, WidgetPinReceiver::class.java).putWidgetDataTypes(dataTypes)
       // PendingIntents that differ only in extras are the same PendingIntent, so with
-      // FLAG_UPDATE_CURRENT a pin request for one type would overwrite another type's pending
-      // extras. A distinct request code per type keeps them separate.
+      // FLAG_UPDATE_CURRENT a pin request for one selection would overwrite another's pending
+      // extras. A request code derived from the ordered selection keeps them separate.
       // FLAG_MUTABLE is needed so the launcher can add EXTRA_APPWIDGET_ID.
       return PendingIntent.getBroadcast(
         context,
-        /* requestCode= */ dataType.ordinal,
+        /* requestCode= */ dataTypes.asList().hashCode(),
         intent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
       )
@@ -41,16 +42,15 @@ class WidgetPinReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     val appWidgetId: Int =
       intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-    val dataType: DataType =
-      intent.getDataType()
-        ?: run {
-          Log.w("WidgetPinReceiver", "Ignoring pin callback without a valid data type")
-          return
-        }
+    val dataTypes: ImmutableSet<DataType> = intent.getWidgetDataTypes()
+    if (dataTypes.isEmpty()) {
+      Log.w("WidgetPinReceiver", "Ignoring pin callback without valid data types")
+      return
+    }
     val pendingResult = goAsync()
     CoroutineScope(Dispatchers.Default).launch {
       try {
-        WeightGlanceWidget().configure(context, appWidgetId, dataType)
+        WeightGlanceWidget().configure(context, appWidgetId, dataTypes)
       } catch (e: IllegalArgumentException) {
         // The widget was removed before the callback arrived (or the ID is missing).
         Log.w("WidgetPinReceiver", "Couldn't configure widget $appWidgetId", e)

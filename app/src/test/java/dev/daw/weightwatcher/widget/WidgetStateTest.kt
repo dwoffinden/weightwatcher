@@ -1,5 +1,6 @@
 package dev.daw.weightwatcher.widget
 
+import com.google.common.collect.ImmutableSet
 import com.google.common.truth.Truth.assertThat
 import dev.daw.weightwatcher.DataType
 import dev.daw.weightwatcher.DataTypeState.Status
@@ -22,15 +23,16 @@ class WidgetStateTest {
     val state: WidgetState =
       resolveWidgetState(
         appWidgetId = 77,
-        dataType = null,
+        dataTypes = ImmutableSet.of(),
         settings = SyncSettings.getDefaultInstance(),
         isSyncRunning = false,
       )
 
-    assertThat(state).isEqualTo(WidgetState.Unconfigured(appWidgetId = 77))
-    assertThat(state.iconRes).isEqualTo(R.drawable.ic_sync)
-    assertThat(state.contentDescription).isEqualTo("Setting up")
-    assertThat(state.clickAction).isEqualTo(WidgetClickAction.ConfigureWidget(appWidgetId = 77))
+    val expected = WidgetState.Unconfigured(appWidgetId = 77)
+    assertThat(state).isEqualTo(expected)
+    assertThat(expected.iconRes).isEqualTo(R.drawable.ic_sync)
+    assertThat(expected.contentDescription).isEqualTo("Setting up")
+    assertThat(expected.clickAction).isEqualTo(WidgetClickAction.ConfigureWidget(appWidgetId = 77))
   }
 
   @Test
@@ -38,14 +40,15 @@ class WidgetStateTest {
     val state: WidgetState =
       resolveWidgetState(
         appWidgetId = 42,
-        dataType = DataType.WEIGHT,
+        dataTypes = ImmutableSet.of(DataType.WEIGHT),
         settings = SyncSettings.getDefaultInstance(),
         isSyncRunning = false,
       )
 
-    assertThat(state).isEqualTo(WidgetState.Syncing(DataType.WEIGHT, hasPermissions = true))
-    assertThat(state.iconRes).isEqualTo(R.drawable.ic_sync)
-    assertThat(state.clickAction).isEqualTo(WidgetClickAction.Refresh)
+    val expectedItem = WidgetItemState.Syncing(DataType.WEIGHT, hasPermissions = true)
+    assertThat(state).isEqualTo(WidgetState.Configured(listOf(expectedItem)))
+    assertThat(expectedItem.iconRes).isEqualTo(R.drawable.ic_sync)
+    assertThat(expectedItem.clickAction).isEqualTo(WidgetClickAction.Refresh)
   }
 
   @Test
@@ -57,13 +60,15 @@ class WidgetStateTest {
     val state: WidgetState =
       resolveWidgetState(
         appWidgetId = 42,
-        dataType = DataType.SLEEP,
+        dataTypes = ImmutableSet.of(DataType.SLEEP),
         settings = settings,
         isSyncRunning = true,
       )
 
-    assertThat(state).isEqualTo(WidgetState.Syncing(DataType.SLEEP, hasPermissions = false))
-    assertThat(state.clickAction).isEqualTo(WidgetClickAction.RequestPermissions(DataType.SLEEP))
+    val expectedItem = WidgetItemState.Syncing(DataType.SLEEP, hasPermissions = false)
+    assertThat(state).isEqualTo(WidgetState.Configured(listOf(expectedItem)))
+    assertThat(expectedItem.clickAction)
+      .isEqualTo(WidgetClickAction.RequestPermissions(DataType.SLEEP))
   }
 
   @Test
@@ -75,14 +80,16 @@ class WidgetStateTest {
     val state: WidgetState =
       resolveWidgetState(
         appWidgetId = 42,
-        dataType = DataType.SLEEP,
+        dataTypes = ImmutableSet.of(DataType.SLEEP),
         settings = settings,
         isSyncRunning = false,
       )
 
-    assertThat(state).isEqualTo(WidgetState.Unauthorized(DataType.SLEEP))
-    assertThat(state.iconRes).isEqualTo(R.drawable.ic_warning)
-    assertThat(state.clickAction).isEqualTo(WidgetClickAction.RequestPermissions(DataType.SLEEP))
+    val expectedItem = WidgetItemState.Unauthorized(DataType.SLEEP)
+    assertThat(state).isEqualTo(WidgetState.Configured(listOf(expectedItem)))
+    assertThat(expectedItem.iconRes).isEqualTo(R.drawable.ic_warning)
+    assertThat(expectedItem.clickAction)
+      .isEqualTo(WidgetClickAction.RequestPermissions(DataType.SLEEP))
   }
 
   @Test
@@ -94,14 +101,15 @@ class WidgetStateTest {
     val state: WidgetState =
       resolveWidgetState(
         appWidgetId = 42,
-        dataType = DataType.STEPS,
+        dataTypes = ImmutableSet.of(DataType.STEPS),
         settings = settings,
         isSyncRunning = false,
       )
 
-    assertThat(state).isEqualTo(WidgetState.NoRecords(DataType.STEPS))
-    assertThat(state.iconRes).isEqualTo(DataType.STEPS.iconRes)
-    assertThat(state.clickAction).isEqualTo(WidgetClickAction.Refresh)
+    val expectedItem = WidgetItemState.NoRecords(DataType.STEPS)
+    assertThat(state).isEqualTo(WidgetState.Configured(listOf(expectedItem)))
+    assertThat(expectedItem.iconRes).isEqualTo(DataType.STEPS.iconRes)
+    assertThat(expectedItem.clickAction).isEqualTo(WidgetClickAction.Refresh)
   }
 
   @Test
@@ -122,14 +130,52 @@ class WidgetStateTest {
     val state: WidgetState =
       resolveWidgetState(
         appWidgetId = 42,
-        dataType = DataType.WEIGHT,
+        dataTypes = ImmutableSet.of(DataType.WEIGHT),
         settings = settings,
         isSyncRunning = false,
       )
 
-    assertThat(state).isEqualTo(WidgetState.Active(DataType.WEIGHT, lastRecordTime))
-    assertThat(state.iconRes).isEqualTo(DataType.WEIGHT.iconRes)
-    assertThat(state.contentDescription).isEqualTo(DataType.WEIGHT.displayName)
-    assertThat(state.clickAction).isEqualTo(WidgetClickAction.Refresh)
+    val expectedItem = WidgetItemState.Active(DataType.WEIGHT, lastRecordTime)
+    assertThat(state).isEqualTo(WidgetState.Configured(listOf(expectedItem)))
+    assertThat(expectedItem.iconRes).isEqualTo(DataType.WEIGHT.iconRes)
+    assertThat(expectedItem.contentDescription).isEqualTo(DataType.WEIGHT.displayName)
+    assertThat(expectedItem.clickAction).isEqualTo(WidgetClickAction.Refresh)
+  }
+
+  @Test
+  fun resolveWidgetState_multipleTypes_preservesOrderAndResolvesEachIndependently() {
+    val weightTime = Instant.parse("2026-01-01T00:00:00Z")
+    val settings: SyncSettings = syncSettings {
+      setStatesByType(
+        mapOf(
+          DataType.WEIGHT to
+            dataTypeState {
+              status = Status.OK
+              lastRecordTime = weightTime.toTimestamp()
+            },
+          DataType.SLEEP to dataTypeState { status = Status.NO_PERMISSIONS },
+          DataType.STEPS to dataTypeState { status = Status.OK },
+        )
+      )
+    }
+
+    val state: WidgetState =
+      resolveWidgetState(
+        appWidgetId = 42,
+        dataTypes = ImmutableSet.of(DataType.SLEEP, DataType.WEIGHT, DataType.STEPS),
+        settings = settings,
+        isSyncRunning = false,
+      )
+
+    assertThat(state)
+      .isEqualTo(
+        WidgetState.Configured(
+          listOf(
+            WidgetItemState.Unauthorized(DataType.SLEEP),
+            WidgetItemState.Active(DataType.WEIGHT, weightTime),
+            WidgetItemState.NoRecords(DataType.STEPS),
+          )
+        )
+      )
   }
 }

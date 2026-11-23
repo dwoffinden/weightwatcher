@@ -3,7 +3,6 @@ package dev.daw.weightwatcher
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer
 import com.google.protobuf.GeneratedMessageLite
-import com.google.protobuf.InvalidProtocolBufferException
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -16,10 +15,8 @@ import java.io.OutputStream
 class ProtoSerializer<T : GeneratedMessageLite<T, *>>(override val defaultValue: T) :
   Serializer<T> {
   override suspend fun readFrom(input: InputStream): T =
-    try {
-      defaultValue.parserForType.parseFrom(input)
-    } catch (exception: InvalidProtocolBufferException) {
-      throw CorruptionException("Cannot read proto.", exception)
+    defaultValue.parserForType.parseOr(input) {
+      throw CorruptionException("Cannot read proto.", it)
     }
 
   override suspend fun writeTo(t: T, output: OutputStream) = t.writeTo(output)

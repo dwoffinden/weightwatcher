@@ -7,6 +7,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -31,7 +32,9 @@ import androidx.glance.color.ColorProvider
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
+import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxHeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
@@ -40,15 +43,18 @@ import androidx.glance.layout.wrapContentSize
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider as GlanceColorProvider
+import com.google.common.collect.ImmutableSet
 import dev.daw.weightwatcher.AppClock
 import dev.daw.weightwatcher.DataType
 import dev.daw.weightwatcher.MainActivity
 import dev.daw.weightwatcher.SyncSettings
 import dev.daw.weightwatcher.WeightGlanceWidget
 import dev.daw.weightwatcher.dataTypeActionParameters
-import dev.daw.weightwatcher.getDataType
+import dev.daw.weightwatcher.getWidgetDataTypes
 import dev.daw.weightwatcher.minus
 import dev.daw.weightwatcher.widget.WidgetClickAction
+import dev.daw.weightwatcher.widget.WidgetItemState
 import dev.daw.weightwatcher.widget.WidgetState
 import dev.daw.weightwatcher.widget.resolveWidgetState
 import java.time.Duration
@@ -71,13 +77,13 @@ internal suspend fun GlanceAppWidget.provideGlanceWidgetContent(
 
   provideContent {
     val prefs: Preferences = currentState()
-    val dataType: DataType? = prefs.getDataType()
+    val dataTypes: ImmutableSet<DataType> = prefs.getWidgetDataTypes()
     val settings: SyncSettings by dataStore.data.collectAsState(initial = initialSettings)
     val isSyncRunning: Boolean by isSyncRunningFlow.collectAsState(initial = initialIsSyncRunning)
     val state: WidgetState =
       resolveWidgetState(
         appWidgetId = appWidgetId,
-        dataType = dataType,
+        dataTypes = dataTypes,
         settings = settings,
         isSyncRunning = isSyncRunning,
       )
@@ -105,40 +111,102 @@ internal fun GlanceWidgetContent(
       day = dynamicLightColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
       night = dynamicDarkColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
     )
+  val cardModifier: GlanceModifier =
+    GlanceModifier.fillMaxSize()
+      .appWidgetBackground()
+      .cornerRadius(android.R.dimen.system_app_widget_background_radius)
+      .background(backgroundColor)
+
+  when (state) {
+    is WidgetState.Unconfigured -> {
+      Column(
+        modifier = cardModifier.padding(8.dp).clickable(state.clickAction.toGlanceAction()),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
+      ) {
+        Image(
+          provider = ImageProvider(state.iconRes),
+          contentDescription = state.contentDescription,
+          colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+          modifier = GlanceModifier.size(32.dp),
+        )
+        Spacer(modifier = GlanceModifier.height(4.dp))
+        Text(
+          text = "Sync...",
+          style = TextStyle(fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
+        )
+      }
+    }
+    is WidgetState.Configured -> {
+      if (state.items.size == 1) {
+        val item: WidgetItemState = state.items.single()
+        GlanceWidgetTile(
+          context = context,
+          item = item,
+          clock = clock,
+          useChronometer = useChronometer,
+          iconSize = 32.dp,
+          modifier = cardModifier.padding(8.dp).clickable(item.clickAction.toGlanceAction()),
+        )
+      } else {
+        val iconSize: Dp = if (state.items.size <= 3) 28.dp else 24.dp
+        Row(
+          modifier = cardModifier.padding(horizontal = 4.dp, vertical = 8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          for (item in state.items) {
+            GlanceWidgetTile(
+              context = context,
+              item = item,
+              clock = clock,
+              useChronometer = useChronometer,
+              iconSize = iconSize,
+              modifier =
+                GlanceModifier.defaultWeight()
+                  .fillMaxHeight()
+                  .clickable(item.clickAction.toGlanceAction()),
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun GlanceWidgetTile(
+  context: Context,
+  item: WidgetItemState,
+  clock: AppClock,
+  useChronometer: Boolean,
+  iconSize: Dp,
+  modifier: GlanceModifier,
+) {
+  val staleness: Duration? =
+    if (item is WidgetItemState.Active) clock.instant() - item.lastRecordTime else null
+  val iconTint: GlanceColorProvider =
+    when (item) {
+      is WidgetItemState.Syncing,
+      is WidgetItemState.NoRecords -> GlanceTheme.colors.onSurfaceVariant
+      is WidgetItemState.Unauthorized -> GlanceTheme.colors.error
+      is WidgetItemState.Active ->
+        if (staleness != null && staleness > WeightGlanceWidget.STALE_THRESHOLD) {
+          GlanceTheme.colors.error
+        } else {
+          GlanceTheme.colors.primary
+        }
+    }
 
   Column(
-    modifier =
-      GlanceModifier.fillMaxSize()
-        .appWidgetBackground()
-        .cornerRadius(android.R.dimen.system_app_widget_background_radius)
-        .background(backgroundColor)
-        .padding(8.dp)
-        .clickable(state.clickAction.toGlanceAction()),
+    modifier = modifier,
     verticalAlignment = Alignment.CenterVertically,
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
-    val staleness: Duration? =
-      if (state is WidgetState.Active) clock.instant() - state.lastRecordTime else null
-
-    val iconTint =
-      when (state) {
-        is WidgetState.Unconfigured,
-        is WidgetState.Syncing,
-        is WidgetState.NoRecords -> GlanceTheme.colors.onSurfaceVariant
-        is WidgetState.Unauthorized -> GlanceTheme.colors.error
-        is WidgetState.Active ->
-          if (staleness != null && staleness > WeightGlanceWidget.STALE_THRESHOLD) {
-            GlanceTheme.colors.error
-          } else {
-            GlanceTheme.colors.primary
-          }
-      }
-
     Image(
-      provider = ImageProvider(state.iconRes),
-      contentDescription = state.contentDescription,
+      provider = ImageProvider(item.iconRes),
+      contentDescription = item.contentDescription,
       colorFilter = ColorFilter.tint(iconTint),
-      modifier = GlanceModifier.size(32.dp),
+      modifier = GlanceModifier.size(iconSize),
     )
     Spacer(modifier = GlanceModifier.height(4.dp))
     if (useChronometer && staleness != null && staleness < WeightGlanceWidget.HOURS_THRESHOLD) {
@@ -151,12 +219,11 @@ internal fun GlanceWidgetContent(
         if (staleness != null) {
           WeightGlanceWidget.formatStaleness(staleness)
         } else {
-          when (state) {
-            is WidgetState.Unconfigured,
-            is WidgetState.Syncing -> "Sync..."
-            is WidgetState.Unauthorized -> "Auth"
-            is WidgetState.NoRecords -> "None"
-            is WidgetState.Active -> error("Unreachable: Active always computes staleness")
+          when (item) {
+            is WidgetItemState.Syncing -> "Sync..."
+            is WidgetItemState.Unauthorized -> "Auth"
+            is WidgetItemState.NoRecords -> "None"
+            is WidgetItemState.Active -> error("Unreachable: Active always computes staleness")
           }
         }
       Text(

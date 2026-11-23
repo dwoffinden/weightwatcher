@@ -9,7 +9,6 @@ import android.graphics.Color
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
-import android.view.View.MeasureSpec
 import android.widget.FrameLayout
 import android.widget.RemoteViews
 import androidx.compose.remote.core.CoreDocument
@@ -49,16 +48,18 @@ import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestParameterInjector::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [36], application = Application::class, qualifiers = "w120dp-h120dp-xxhdpi")
+@Config(sdk = [36], application = Application::class, qualifiers = "w320dp-h120dp-xxhdpi")
 class WidgetScreenshotTest {
 
-  enum class VisualScenario {
+  enum class VisualScenario(val widthDp: Int = WIDGET_CELL_SIZE_DP) {
     ACTIVE_20M,
     ACTIVE_2H,
     STALE_24H,
     SYNCING,
     UNAUTHORIZED,
     NO_RECORDS,
+    MULTI_3_2X1(widthDp = 184),
+    MULTI_5_3X1(widthDp = 280),
   }
 
   private val context: Context = ApplicationProvider.getApplicationContext()
@@ -68,7 +69,7 @@ class WidgetScreenshotTest {
     runBlocking<Unit> { captureGlance(scenario, theme = "light") }
 
   @Test
-  @Config(qualifiers = "w120dp-h120dp-night-xxhdpi")
+  @Config(qualifiers = "w320dp-h120dp-night-xxhdpi")
   fun glance_dark(@TestParameter scenario: VisualScenario) =
     runBlocking<Unit> { captureGlance(scenario, theme = "dark") }
 
@@ -86,7 +87,7 @@ class WidgetScreenshotTest {
     }
 
   @Test
-  @Config(qualifiers = "w120dp-h120dp-night-xxhdpi")
+  @Config(qualifiers = "w320dp-h120dp-night-xxhdpi")
   // RcPlatformProfiles and Theme are @RestrictTo(LIBRARY_GROUP) in androidx.compose.remote.
   @Suppress("RestrictedApi")
   fun remoteComposeV6_dark(@TestParameter scenario: VisualScenario) =
@@ -130,7 +131,7 @@ class WidgetScreenshotTest {
     val state: WidgetState = scenario.toWidgetState(FIXED_NOW)
     val remoteViews: RemoteViews =
       GlanceRemoteViews()
-        .compose(context = context, size = DpSize(WIDGET_SIZE_DP.dp, WIDGET_SIZE_DP.dp)) {
+        .compose(context = context, size = DpSize(scenario.widthDp.dp, WIDGET_CELL_SIZE_DP.dp)) {
           GlanceTheme {
             GlanceWidgetContent(
               context = context,
@@ -145,7 +146,11 @@ class WidgetScreenshotTest {
           }
         }
         .remoteViews
-    captureRemoteViews(remoteViews, fileName = "glance_${theme}_${scenario.name.lowercase()}.png")
+    captureRemoteViews(
+      remoteViews = remoteViews,
+      widthDp = scenario.widthDp,
+      fileName = "glance_${theme}_${scenario.name.lowercase()}.png",
+    )
   }
 
   // CoreDocument, RemoteComposeBuffer, SystemClock, and AndroidRemoteContext are LIBRARY_GROUP.
@@ -163,10 +168,13 @@ class WidgetScreenshotTest {
         profile = profile,
       )
     val density: Float = context.resources.displayMetrics.density
-    val widgetPx: Int = (WIDGET_SIZE_DP * density).toInt()
+    val widgetWidthPx: Int = (scenario.widthDp * density).toInt()
+    val widgetHeightPx: Int = (WIDGET_CELL_SIZE_DP * density).toInt()
     val paddingPx: Int = (FRAME_PADDING_DP * density).toInt()
-    val totalPx: Int = widgetPx + 2 * paddingPx
-    val widgetBitmap: Bitmap = Bitmap.createBitmap(widgetPx, widgetPx, Bitmap.Config.ARGB_8888)
+    val totalWidthPx: Int = widgetWidthPx + 2 * paddingPx
+    val totalHeightPx: Int = widgetHeightPx + 2 * paddingPx
+    val widgetBitmap: Bitmap =
+      Bitmap.createBitmap(widgetWidthPx, widgetHeightPx, Bitmap.Config.ARGB_8888)
     val widgetCanvas = Canvas(widgetBitmap)
     val remoteClock = RemoteSystemClock(Clock.fixed(FIXED_NOW, ZoneOffset.UTC))
     val remoteContext =
@@ -177,8 +185,8 @@ class WidgetScreenshotTest {
         setAnimationEnabled(true)
         currentTime = remoteClock.millis()
         useCanvas(widgetCanvas)
-        mWidth = widgetPx.toFloat()
-        mHeight = widgetPx.toFloat()
+        mWidth = widgetWidthPx.toFloat()
+        mHeight = widgetHeightPx.toFloat()
         setPaintTheme(theme)
       }
     val document = CoreDocument(remoteClock)
@@ -192,30 +200,35 @@ class WidgetScreenshotTest {
     widgetBitmap.eraseColor(0)
     document.paint(remoteContext, theme)
 
-    val framedBitmap: Bitmap = Bitmap.createBitmap(totalPx, totalPx, Bitmap.Config.ARGB_8888)
+    val framedBitmap: Bitmap =
+      Bitmap.createBitmap(totalWidthPx, totalHeightPx, Bitmap.Config.ARGB_8888)
     val framedCanvas = Canvas(framedBitmap)
     framedCanvas.drawColor(FRAME_BACKGROUND_COLOR)
     framedCanvas.drawBitmap(widgetBitmap, paddingPx.toFloat(), paddingPx.toFloat(), null)
     framedBitmap.captureRoboImage("src/test/snapshots/${name}_${scenario.name.lowercase()}.png")
   }
 
-  private fun captureRemoteViews(remoteViews: RemoteViews, fileName: String) {
+  private fun captureRemoteViews(remoteViews: RemoteViews, widthDp: Int, fileName: String) {
     val activity: Activity = Robolectric.buildActivity(Activity::class.java).setup().get()
     val density: Float = activity.resources.displayMetrics.density
-    val widgetPx: Int = (WIDGET_SIZE_DP * density).toInt()
+    val widgetWidthPx: Int = (widthDp * density).toInt()
+    val widgetHeightPx: Int = (WIDGET_CELL_SIZE_DP * density).toInt()
     val paddingPx: Int = (FRAME_PADDING_DP * density).toInt()
-    val totalPx: Int = widgetPx + 2 * paddingPx
+    val totalWidthPx: Int = widgetWidthPx + 2 * paddingPx
+    val totalHeightPx: Int = widgetHeightPx + 2 * paddingPx
     val frame =
       FrameLayout(activity).apply {
         setBackgroundColor(FRAME_BACKGROUND_COLOR)
         setPadding(paddingPx, paddingPx, paddingPx, paddingPx)
       }
     val widgetView: View = remoteViews.apply(activity, frame)
-    frame.addView(widgetView, FrameLayout.LayoutParams(widgetPx, widgetPx, Gravity.CENTER))
-    activity.setContentView(frame)
-    val spec: Int = MeasureSpec.makeMeasureSpec(totalPx, MeasureSpec.EXACTLY)
-    frame.measure(spec, spec)
-    frame.layout(0, 0, totalPx, totalPx)
+    frame.addView(
+      widgetView,
+      FrameLayout.LayoutParams(widgetWidthPx, widgetHeightPx, Gravity.CENTER),
+    )
+    val root = FrameLayout(activity)
+    root.addView(frame, FrameLayout.LayoutParams(totalWidthPx, totalHeightPx))
+    activity.setContentView(root)
     frame.captureRoboImage("src/test/snapshots/$fileName")
   }
 
@@ -223,19 +236,57 @@ class WidgetScreenshotTest {
     when (this) {
       VisualScenario.ACTIVE_20M ->
         // Add 10s buffer past 20m so truncation stays on 20m even if wall clock ticks slightly.
-        WidgetState.Active(DataType.WEIGHT, lastRecordTime = now - 20.minutes - 10.seconds)
+        WidgetState.Configured(
+          listOf(
+            WidgetItemState.Active(DataType.WEIGHT, lastRecordTime = now - 20.minutes - 10.seconds)
+          )
+        )
       VisualScenario.ACTIVE_2H ->
-        WidgetState.Active(DataType.WEIGHT, lastRecordTime = now - 2.hours - 10.seconds)
+        WidgetState.Configured(
+          listOf(
+            WidgetItemState.Active(DataType.WEIGHT, lastRecordTime = now - 2.hours - 10.seconds)
+          )
+        )
       VisualScenario.STALE_24H ->
-        WidgetState.Active(DataType.WEIGHT, lastRecordTime = now - 24.hours - 10.seconds)
-      VisualScenario.SYNCING -> WidgetState.Syncing(DataType.WEIGHT, hasPermissions = true)
-      VisualScenario.UNAUTHORIZED -> WidgetState.Unauthorized(DataType.WEIGHT)
-      VisualScenario.NO_RECORDS -> WidgetState.NoRecords(DataType.WEIGHT)
+        WidgetState.Configured(
+          listOf(
+            WidgetItemState.Active(DataType.WEIGHT, lastRecordTime = now - 24.hours - 10.seconds)
+          )
+        )
+      VisualScenario.SYNCING ->
+        WidgetState.Configured(
+          listOf(WidgetItemState.Syncing(DataType.WEIGHT, hasPermissions = true))
+        )
+      VisualScenario.UNAUTHORIZED ->
+        WidgetState.Configured(listOf(WidgetItemState.Unauthorized(DataType.WEIGHT)))
+      VisualScenario.NO_RECORDS ->
+        WidgetState.Configured(listOf(WidgetItemState.NoRecords(DataType.WEIGHT)))
+      VisualScenario.MULTI_3_2X1 ->
+        WidgetState.Configured(
+          listOf(
+            WidgetItemState.Active(DataType.WEIGHT, lastRecordTime = now - 20.minutes - 10.seconds),
+            WidgetItemState.Active(DataType.STEPS, lastRecordTime = now - 24.hours - 10.seconds),
+            WidgetItemState.Unauthorized(DataType.SLEEP),
+          )
+        )
+      VisualScenario.MULTI_5_3X1 ->
+        WidgetState.Configured(
+          listOf(
+            WidgetItemState.Active(DataType.WEIGHT, lastRecordTime = now - 20.minutes - 10.seconds),
+            WidgetItemState.Active(DataType.STEPS, lastRecordTime = now - 2.hours - 10.seconds),
+            WidgetItemState.Active(
+              DataType.HEART_RATE,
+              lastRecordTime = now - 24.hours - 10.seconds,
+            ),
+            WidgetItemState.NoRecords(DataType.SLEEP),
+            WidgetItemState.Syncing(DataType.HYDRATION, hasPermissions = true),
+          )
+        )
     }
 
   private companion object {
     val FIXED_NOW: Instant = Instant.parse("2026-01-01T12:00:00Z")
-    const val WIDGET_SIZE_DP = 88
+    const val WIDGET_CELL_SIZE_DP = 88
     const val FRAME_PADDING_DP = 16
     val FRAME_BACKGROUND_COLOR: Int = Color.rgb(0x78, 0x78, 0x78)
   }
