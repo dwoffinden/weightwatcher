@@ -2,6 +2,7 @@ package dev.daw.weightwatcher
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -14,6 +15,17 @@ import kotlinx.coroutines.launch
 
 class WeightGlanceWidgetReceiver : GlanceAppWidgetReceiver() {
   override val glanceAppWidget: GlanceAppWidget = WeightGlanceWidget()
+
+  override fun onReceive(context: Context, intent: Intent) {
+    if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+      val appWidgetIds: IntArray = WeightGlanceWidget.getPlacedAppWidgetIds(context)
+      if (appWidgetIds.isNotEmpty()) {
+        onUpdate(context, AppWidgetManager.getInstance(context), appWidgetIds)
+      }
+      return
+    }
+    super.onReceive(context, intent)
+  }
 
   override fun onUpdate(
     context: Context,

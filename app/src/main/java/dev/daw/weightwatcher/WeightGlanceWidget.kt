@@ -104,8 +104,16 @@ class WeightGlanceWidget : GlanceAppWidget() {
 
     private fun getPlacedGlanceIds(context: Context): List<GlanceId> {
       val glanceAppWidgetManager = GlanceAppWidgetManager(context)
-      return getPlacedAppWidgetIds(context).map { appWidgetId ->
-        glanceAppWidgetManager.getGlanceIdBy(appWidgetId)
+      return buildList {
+        for (appWidgetId in getPlacedAppWidgetIds(context)) {
+          val glanceId: GlanceId =
+            try {
+              glanceAppWidgetManager.getGlanceIdBy(appWidgetId)
+            } catch (_: IllegalArgumentException) {
+              continue
+            }
+          add(glanceId)
+        }
       }
     }
   }
@@ -163,7 +171,12 @@ class WeightGlanceWidget : GlanceAppWidget() {
     val glanceAppWidgetManager = GlanceAppWidgetManager(context)
     var migratedAny = false
     for (appWidgetId in getPlacedAppWidgetIds(context)) {
-      val glanceId = glanceAppWidgetManager.getGlanceIdBy(appWidgetId)
+      val glanceId =
+        try {
+          glanceAppWidgetManager.getGlanceIdBy(appWidgetId)
+        } catch (_: IllegalArgumentException) {
+          continue
+        }
       if (getWidgetDataTypes(context, glanceId).isEmpty()) {
         setWidgetDataTypes(context, glanceId, ImmutableSet.of(DataType.WEIGHT))
         updateWidget(context, appWidgetId, glanceId, dataStore)

@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
 import androidx.datastore.core.DataStore
@@ -21,6 +22,7 @@ import dev.daw.weightwatcher.widget.WidgetState
 import dev.daw.weightwatcher.widget.resolveWidgetState
 import kotlinx.coroutines.flow.first
 
+private const val TAG = "RemoteComposeWidget"
 private const val CONFIGURE_REQUEST_CODE_OFFSET = 10_000
 
 /**
@@ -42,7 +44,13 @@ internal suspend fun updateRemoteComposeWidgets(
   val glanceAppWidgetManager = GlanceAppWidgetManager(context)
   val settings: SyncSettings = dataStore.data.first()
   for (appWidgetId in appWidgetIds) {
-    val glanceId = glanceAppWidgetManager.getGlanceIdBy(appWidgetId)
+    val glanceId =
+      try {
+        glanceAppWidgetManager.getGlanceIdBy(appWidgetId)
+      } catch (e: IllegalArgumentException) {
+        Log.w(TAG, "Skipping invalid appWidgetId $appWidgetId", e)
+        continue
+      }
     val dataTypes: ImmutableSet<DataType> = WeightGlanceWidget.getWidgetDataTypes(context, glanceId)
     val remoteViews: RemoteViews =
       buildRemoteComposeWidgetViews(

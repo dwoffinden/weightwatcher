@@ -107,6 +107,24 @@ class RemoteComposeWidgetTest {
     }
 
   @Test
+  fun updateRemoteComposeWidgets_invalidAppWidgetId_skipsAndUpdatesValidWidgets() =
+    runBlocking<Unit> {
+      val validWidgetId: Int = placeWidget(context)
+      val glanceId = GlanceAppWidgetManager(context).getGlanceIdBy(validWidgetId)
+      WeightGlanceWidget.setWidgetDataTypes(context, glanceId, ImmutableSet.of(DataType.WEIGHT))
+
+      updateRemoteComposeWidgets(
+        context = context,
+        appWidgetIds = intArrayOf(999_999, validWidgetId),
+        dataStore = dataStore,
+        isSyncRunning = false,
+      )
+
+      val shadowAppWidgetManager = shadowOf(AppWidgetManager.getInstance(context))
+      assertThat(shadowAppWidgetManager.getViewFor(validWidgetId)).isNotNull()
+    }
+
+  @Test
   fun buildRemoteComposeWidgetViews_activeWidgetTapped_enqueuesOneTimeSyncWork() =
     runBlocking<Unit> {
       val settings: SyncSettings = syncSettings {

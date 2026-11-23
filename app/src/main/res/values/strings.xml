@@ -2,4 +2,6 @@
 <resources>
  <string name="app_name">WeightWatcher</string>
  <string name="widget_description">Shows how long since you last logged a type of health data, such as weight, steps or sleep.</string>
+ <string name="widget_loading_description">Loading widget</string>
+ <string name="widget_syncing_label">Sync…</string>
 </resources>
