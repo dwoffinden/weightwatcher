@@ -3,10 +3,14 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    git-hooks.url = "github:cachix/git-hooks.nix";
-    git-hooks.inputs.nixpkgs.follows = "nixpkgs";
-    flint.url = "github:notashelf/flint";
-    flint.inputs.nixpkgs.follows = "nixpkgs";
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    flint = {
+      url = "github:notashelf/flint";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -19,8 +23,54 @@
     }:
     let
       forEachSystem = nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed;
+      mkPreCommitCheck =
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        git-hooks.lib.${system}.run {
+          src = ./.;
+          hooks = {
+            keep-sorted.enable = true;
+            nixfmt.enable = true;
+            yamlfmt = {
+              enable = true;
+              settings.lint-only = false;
+            };
+            ktfmt = {
+              enable = true;
+              name = "ktfmt";
+              entry = "${pkgs.ktfmt}/bin/ktfmt --google-style";
+              files = "\\.kts?$";
+            };
+            xmlformat = {
+              enable = true;
+              name = "xmlformat";
+              entry = "${pkgs.xmlformat}/bin/xmlformat -i";
+              files = "\\.xml$";
+            };
+            buf-format = {
+              enable = true;
+              name = "buf-format";
+              entry = "${pkgs.buf}/bin/buf format -w app/src/main/proto";
+              files = "\\.proto$";
+              pass_filenames = false;
+            };
+            flint = {
+              enable = true;
+              name = "flint";
+              entry = "${flint.packages.${system}.default}/bin/flint --fail-if-multiple-versions";
+              files = "flake\\.(nix|lock)$";
+              pass_filenames = false;
+            };
+          };
+        };
     in
     {
+      checks = forEachSystem (system: {
+        pre-commit-check = mkPreCommitCheck system;
+      });
+
       devShells = forEachSystem (
         system:
         let
@@ -78,42 +128,7 @@
             echo "Starting emulator: $AVD_NAME"
             emulator -avd "$AVD_NAME"
           '';
-          pre-commit-check = git-hooks.lib.${system}.run {
-            src = ./.;
-            hooks = {
-              keep-sorted.enable = true;
-              yamlfmt = {
-                enable = true;
-                settings.lint-only = false;
-              };
-              ktfmt = {
-                enable = true;
-                name = "ktfmt";
-                entry = "${pkgs.ktfmt}/bin/ktfmt --google-style";
-                files = "\\.kts?$";
-              };
-              xmlformat = {
-                enable = true;
-                name = "xmlformat";
-                entry = "${pkgs.xmlformat}/bin/xmlformat -i";
-                files = "\\.xml$";
-              };
-              buf-format = {
-                enable = true;
-                name = "buf-format";
-                entry = "${pkgs.buf}/bin/buf format -w app/src/main/proto";
-                files = "\\.proto$";
-                pass_filenames = false;
-              };
-              flint = {
-                enable = true;
-                name = "flint";
-                entry = "${flint.packages.${system}.default}/bin/flint --fail-if-multiple-versions";
-                files = "flake\\.(nix|lock)$";
-                pass_filenames = false;
-              };
-            };
-          };
+          pre-commit-check = self.checks.${system}.pre-commit-check;
           jdk = pkgs.jdk25_headless;
           # gradle.properties is generated into the Nix store and symlinked at
           # shell entry so Gradle sees the correct SDK store path.
