@@ -145,7 +145,7 @@
               ${pre-commit-check.shellHook}
               export ANDROID_HOME="${androidSdk}/libexec/android-sdk"
               export ANDROID_SDK_ROOT="${androidSdk}/libexec/android-sdk"
-              export JAVA_HOME="${jdk}/lib/openjdk"
+              export JAVA_HOME="${jdk.home}"
               ln -sf ${mkGradleProperties androidSdk} gradle.properties
             '';
           };
@@ -159,7 +159,7 @@
             shellHook = ''
               export ANDROID_HOME="${ciAndroidSdk}/libexec/android-sdk"
               export ANDROID_SDK_ROOT="${ciAndroidSdk}/libexec/android-sdk"
-              export JAVA_HOME="${jdk}/lib/openjdk"
+              export JAVA_HOME="${jdk.home}"
               ln -sf ${mkGradleProperties ciAndroidSdk} gradle.properties
             '';
           };
