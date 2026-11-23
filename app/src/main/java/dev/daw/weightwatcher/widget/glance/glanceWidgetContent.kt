@@ -61,11 +61,11 @@ import kotlinx.coroutines.flow.first
 private val EXTRA_APPWIDGET_ID_KEY: ActionParameters.Key<Int> =
   ActionParameters.Key(AppWidgetManager.EXTRA_APPWIDGET_ID)
 
-private val WIDGET_BACKGROUND_COLOR: ColorProvider = ColorProvider(R.color.widget_background)
-private val WIDGET_PRIMARY_COLOR: ColorProvider = ColorProvider(R.color.widget_primary)
-private val WIDGET_ERROR_COLOR: ColorProvider = ColorProvider(R.color.widget_error)
-private val WIDGET_ON_SURFACE_COLOR: ColorProvider = ColorProvider(R.color.widget_on_surface)
-private val WIDGET_ON_SURFACE_VARIANT_COLOR: ColorProvider =
+private val WIDGET_BACKGROUND_COLOUR: ColorProvider = ColorProvider(R.color.widget_background)
+private val WIDGET_PRIMARY_COLOUR: ColorProvider = ColorProvider(R.color.widget_primary)
+private val WIDGET_ERROR_COLOUR: ColorProvider = ColorProvider(R.color.widget_error)
+private val WIDGET_ON_SURFACE_COLOUR: ColorProvider = ColorProvider(R.color.widget_on_surface)
+private val WIDGET_ON_SURFACE_VARIANT_COLOUR: ColorProvider =
   ColorProvider(R.color.widget_on_surface_variant)
 
 internal suspend fun GlanceAppWidget.provideGlanceWidgetContent(
@@ -112,7 +112,7 @@ internal fun GlanceWidgetContent(
     GlanceModifier.fillMaxSize()
       .appWidgetBackground()
       .cornerRadius(android.R.dimen.system_app_widget_background_radius)
-      .background(WIDGET_BACKGROUND_COLOR)
+      .background(WIDGET_BACKGROUND_COLOUR)
 
   when (state) {
     is WidgetState.Unconfigured -> {
@@ -124,13 +124,13 @@ internal fun GlanceWidgetContent(
         Image(
           provider = ImageProvider(state.iconRes),
           contentDescription = state.contentDescription,
-          colorFilter = ColorFilter.tint(WIDGET_ON_SURFACE_VARIANT_COLOR),
+          colorFilter = ColorFilter.tint(WIDGET_ON_SURFACE_VARIANT_COLOUR),
           modifier = GlanceModifier.size(32.dp),
         )
         Spacer(modifier = GlanceModifier.height(4.dp))
         Text(
           text = "Sync...",
-          style = TextStyle(fontWeight = FontWeight.Bold, color = WIDGET_ON_SURFACE_COLOR),
+          style = TextStyle(fontWeight = FontWeight.Bold, color = WIDGET_ON_SURFACE_COLOUR),
         )
       }
     }
@@ -184,13 +184,13 @@ private fun GlanceWidgetTile(
   val iconTint: ColorProvider =
     when (item) {
       is WidgetItemState.Syncing,
-      is WidgetItemState.NoRecords -> WIDGET_ON_SURFACE_VARIANT_COLOR
-      is WidgetItemState.Unauthorized -> WIDGET_ERROR_COLOR
+      is WidgetItemState.NoRecords -> WIDGET_ON_SURFACE_VARIANT_COLOUR
+      is WidgetItemState.Unauthorized -> WIDGET_ERROR_COLOUR
       is WidgetItemState.Active ->
         if (staleness != null && staleness > WeightGlanceWidget.STALE_THRESHOLD) {
-          WIDGET_ERROR_COLOR
+          WIDGET_ERROR_COLOUR
         } else {
-          WIDGET_PRIMARY_COLOR
+          WIDGET_PRIMARY_COLOUR
         }
     }
 
@@ -225,7 +225,7 @@ private fun GlanceWidgetTile(
         }
       Text(
         text = text,
-        style = TextStyle(fontWeight = FontWeight.Bold, color = WIDGET_ON_SURFACE_COLOR),
+        style = TextStyle(fontWeight = FontWeight.Bold, color = WIDGET_ON_SURFACE_COLOUR),
       )
     }
   }
