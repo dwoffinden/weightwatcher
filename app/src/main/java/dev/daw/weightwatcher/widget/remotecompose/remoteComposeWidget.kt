@@ -16,6 +16,7 @@ import dev.daw.weightwatcher.DataType
 import dev.daw.weightwatcher.MainActivity
 import dev.daw.weightwatcher.SyncSettings
 import dev.daw.weightwatcher.WeightGlanceWidget
+import dev.daw.weightwatcher.getGlanceIdOrNull
 import dev.daw.weightwatcher.putDataType
 import dev.daw.weightwatcher.widget.WidgetClickAction
 import dev.daw.weightwatcher.widget.WidgetState
@@ -44,13 +45,11 @@ internal suspend fun updateRemoteComposeWidgets(
   val glanceAppWidgetManager = GlanceAppWidgetManager(context)
   val settings: SyncSettings = dataStore.data.first()
   for (appWidgetId in appWidgetIds) {
-    val glanceId =
-      try {
-        glanceAppWidgetManager.getGlanceIdBy(appWidgetId)
-      } catch (e: IllegalArgumentException) {
-        Log.w(TAG, "Skipping invalid appWidgetId $appWidgetId", e)
-        continue
-      }
+    val glanceId = glanceAppWidgetManager.getGlanceIdOrNull(appWidgetId)
+    if (glanceId == null) {
+      Log.w(TAG, "Skipping invalid appWidgetId $appWidgetId")
+      continue
+    }
     val dataTypes: ImmutableSet<DataType> = WeightGlanceWidget.getWidgetDataTypes(context, glanceId)
     val remoteViews: RemoteViews =
       buildRemoteComposeWidgetViews(

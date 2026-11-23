@@ -4,8 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.ComponentName
 import android.content.Context
-import androidx.work.Configuration
-import androidx.work.WorkManager
+import androidx.work.testing.WorkManagerTestInitHelper
 import java.util.concurrent.atomic.AtomicInteger
 import org.robolectric.Shadows.shadowOf
 
@@ -29,9 +28,7 @@ fun placeWidget(context: Context): Int {
   return appWidgetId
 }
 
-/** Initialises WorkManager, whose default initializer the manifest removes. */
+/** Initialises a fresh test WorkManager, whose default initializer the manifest removes. */
 fun initializeWorkManager(context: Context) {
-  if (!WorkManager.isInitialized()) {
-    WorkManager.initialize(context, Configuration.Builder().build())
-  }
+  WorkManagerTestInitHelper.initializeTestWorkManager(context)
 }

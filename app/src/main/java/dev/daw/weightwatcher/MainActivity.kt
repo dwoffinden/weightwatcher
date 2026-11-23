@@ -238,7 +238,7 @@ class MainActivity : ComponentActivity() {
     LaunchedEffect(configureWidgetId) {
       if (isConfigureMode) {
         val manager = GlanceAppWidgetManager(this@MainActivity)
-        val glanceId = runCatching { manager.getGlanceIdBy(configureWidgetId) }.getOrNull()
+        val glanceId = manager.getGlanceIdOrNull(configureWidgetId)
         val widgetDataTypes: ImmutableSet<DataType> =
           if (glanceId != null) {
             WeightGlanceWidget.getWidgetDataTypes(this@MainActivity, glanceId)
