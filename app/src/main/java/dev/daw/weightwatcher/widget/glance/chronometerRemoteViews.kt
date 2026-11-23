@@ -2,9 +2,6 @@ package dev.daw.weightwatcher.widget.glance
 
 import android.content.Context
 import android.widget.RemoteViews
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.ui.graphics.toArgb
 import dev.daw.weightwatcher.R
 import java.time.Duration
 
@@ -23,11 +20,5 @@ internal fun createChronometerRemoteViews(
       /* base= */ (elapsedRealtime - staleness).toMillis(),
       /* format= */ null,
       /* started= */ true,
-    )
-    setColorInt(
-      R.id.widget_chronometer,
-      "setTextColor",
-      dynamicLightColorScheme(context).onSurface.toArgb(),
-      dynamicDarkColorScheme(context).onSurface.toArgb(),
     )
   }

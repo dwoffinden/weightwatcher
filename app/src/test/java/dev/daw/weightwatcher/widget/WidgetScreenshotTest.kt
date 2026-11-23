@@ -20,7 +20,6 @@ import androidx.compose.remote.creation.profile.RcPlatformProfiles
 import androidx.compose.remote.player.core.platform.AndroidRemoteContext
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.glance.GlanceTheme
 import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceRemoteViews
 import androidx.test.core.app.ApplicationProvider
@@ -132,18 +131,16 @@ class WidgetScreenshotTest {
     val remoteViews: RemoteViews =
       GlanceRemoteViews()
         .compose(context = context, size = DpSize(scenario.widthDp.dp, WIDGET_CELL_SIZE_DP.dp)) {
-          GlanceTheme {
-            GlanceWidgetContent(
-              context = context,
-              state = state,
-              clock =
-                AppClock.fixed(
-                  instant = FIXED_NOW,
-                  elapsedRealtime = Duration.ofMillis(SystemClock.elapsedRealtime()),
-                ),
-              useChronometer = true,
-            )
-          }
+          GlanceWidgetContent(
+            context = context,
+            state = state,
+            clock =
+              AppClock.fixed(
+                instant = FIXED_NOW,
+                elapsedRealtime = Duration.ofMillis(SystemClock.elapsedRealtime()),
+              ),
+            useChronometer = true,
+          )
         }
         .remoteViews
     captureRemoteViews(

@@ -86,7 +86,6 @@ dependencies {
 
   // Jetpack Glance
   implementation("androidx.glance:glance-appwidget:1.1.1")
-  implementation("androidx.glance:glance-material3:1.1.1")
 
   // DataStore
   implementation("androidx.datastore:datastore:1.3.0")

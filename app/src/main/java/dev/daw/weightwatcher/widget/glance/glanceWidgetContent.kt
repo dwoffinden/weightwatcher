@@ -2,8 +2,6 @@ package dev.daw.weightwatcher.widget.glance
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -13,7 +11,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.action.Action
@@ -28,7 +25,6 @@ import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
-import androidx.glance.color.ColorProvider
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
@@ -43,11 +39,12 @@ import androidx.glance.layout.wrapContentSize
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider as GlanceColorProvider
+import androidx.glance.unit.ColorProvider
 import com.google.common.collect.ImmutableSet
 import dev.daw.weightwatcher.AppClock
 import dev.daw.weightwatcher.DataType
 import dev.daw.weightwatcher.MainActivity
+import dev.daw.weightwatcher.R
 import dev.daw.weightwatcher.SyncSettings
 import dev.daw.weightwatcher.WeightGlanceWidget
 import dev.daw.weightwatcher.dataTypeActionParameters
@@ -63,6 +60,13 @@ import kotlinx.coroutines.flow.first
 
 private val EXTRA_APPWIDGET_ID_KEY: ActionParameters.Key<Int> =
   ActionParameters.Key(AppWidgetManager.EXTRA_APPWIDGET_ID)
+
+private val WIDGET_BACKGROUND_COLOR: ColorProvider = ColorProvider(R.color.widget_background)
+private val WIDGET_PRIMARY_COLOR: ColorProvider = ColorProvider(R.color.widget_primary)
+private val WIDGET_ERROR_COLOR: ColorProvider = ColorProvider(R.color.widget_error)
+private val WIDGET_ON_SURFACE_COLOR: ColorProvider = ColorProvider(R.color.widget_on_surface)
+private val WIDGET_ON_SURFACE_VARIANT_COLOR: ColorProvider =
+  ColorProvider(R.color.widget_on_surface_variant)
 
 internal suspend fun GlanceAppWidget.provideGlanceWidgetContent(
   context: Context,
@@ -88,14 +92,12 @@ internal suspend fun GlanceAppWidget.provideGlanceWidgetContent(
         isSyncRunning = isSyncRunning,
       )
 
-    GlanceTheme {
-      GlanceWidgetContent(
-        context = context,
-        state = state,
-        clock = clock,
-        useChronometer = isPlacedWidget,
-      )
-    }
+    GlanceWidgetContent(
+      context = context,
+      state = state,
+      clock = clock,
+      useChronometer = isPlacedWidget,
+    )
   }
 }
 
@@ -106,16 +108,11 @@ internal fun GlanceWidgetContent(
   clock: AppClock,
   useChronometer: Boolean,
 ) {
-  val backgroundColor =
-    ColorProvider(
-      day = dynamicLightColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
-      night = dynamicDarkColorScheme(context).surfaceContainer.copy(alpha = 0.8f),
-    )
   val cardModifier: GlanceModifier =
     GlanceModifier.fillMaxSize()
       .appWidgetBackground()
       .cornerRadius(android.R.dimen.system_app_widget_background_radius)
-      .background(backgroundColor)
+      .background(WIDGET_BACKGROUND_COLOR)
 
   when (state) {
     is WidgetState.Unconfigured -> {
@@ -127,13 +124,13 @@ internal fun GlanceWidgetContent(
         Image(
           provider = ImageProvider(state.iconRes),
           contentDescription = state.contentDescription,
-          colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+          colorFilter = ColorFilter.tint(WIDGET_ON_SURFACE_VARIANT_COLOR),
           modifier = GlanceModifier.size(32.dp),
         )
         Spacer(modifier = GlanceModifier.height(4.dp))
         Text(
           text = "Sync...",
-          style = TextStyle(fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
+          style = TextStyle(fontWeight = FontWeight.Bold, color = WIDGET_ON_SURFACE_COLOR),
         )
       }
     }
@@ -184,16 +181,16 @@ private fun GlanceWidgetTile(
 ) {
   val staleness: Duration? =
     if (item is WidgetItemState.Active) clock.instant() - item.lastRecordTime else null
-  val iconTint: GlanceColorProvider =
+  val iconTint: ColorProvider =
     when (item) {
       is WidgetItemState.Syncing,
-      is WidgetItemState.NoRecords -> GlanceTheme.colors.onSurfaceVariant
-      is WidgetItemState.Unauthorized -> GlanceTheme.colors.error
+      is WidgetItemState.NoRecords -> WIDGET_ON_SURFACE_VARIANT_COLOR
+      is WidgetItemState.Unauthorized -> WIDGET_ERROR_COLOR
       is WidgetItemState.Active ->
         if (staleness != null && staleness > WeightGlanceWidget.STALE_THRESHOLD) {
-          GlanceTheme.colors.error
+          WIDGET_ERROR_COLOR
         } else {
-          GlanceTheme.colors.primary
+          WIDGET_PRIMARY_COLOR
         }
     }
 
@@ -228,7 +225,7 @@ private fun GlanceWidgetTile(
         }
       Text(
         text = text,
-        style = TextStyle(fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
+        style = TextStyle(fontWeight = FontWeight.Bold, color = WIDGET_ON_SURFACE_COLOR),
       )
     }
   }
