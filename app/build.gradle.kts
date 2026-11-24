@@ -22,8 +22,8 @@ android {
     applicationId = "dev.daw.weightwatcher"
     minSdk = 34
     targetSdk = 37
-    versionCode = 8
-    versionName = "8"
+    versionCode = 9
+    versionName = "9"
     buildConfigField("boolean", "ENABLE_REMOTE_COMPOSE", (widgetRenderer == "auto").toString())
   }
 
