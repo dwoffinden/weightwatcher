@@ -21,6 +21,7 @@ import androidx.compose.remote.creation.compose.layout.RemoteBox
 import androidx.compose.remote.creation.compose.layout.RemoteCanvas
 import androidx.compose.remote.creation.compose.layout.RemoteColumn
 import androidx.compose.remote.creation.compose.layout.RemoteComposable
+import androidx.compose.remote.creation.compose.layout.RemoteImage
 import androidx.compose.remote.creation.compose.layout.RemoteOffset
 import androidx.compose.remote.creation.compose.layout.RemoteRow
 import androidx.compose.remote.creation.compose.layout.RemoteText
@@ -41,10 +42,12 @@ import androidx.compose.remote.creation.compose.state.RemoteBoolean
 import androidx.compose.remote.creation.compose.state.RemoteColor
 import androidx.compose.remote.creation.compose.state.RemoteDp
 import androidx.compose.remote.creation.compose.state.RemoteFloat
+import androidx.compose.remote.creation.compose.state.RemoteImageBitmap
 import androidx.compose.remote.creation.compose.state.RemoteInt
 import androidx.compose.remote.creation.compose.state.RemotePaint
 import androidx.compose.remote.creation.compose.state.RemoteString
 import androidx.compose.remote.creation.compose.state.createThemedRemoteColor
+import androidx.compose.remote.creation.compose.state.rb
 import androidx.compose.remote.creation.compose.state.rc
 import androidx.compose.remote.creation.compose.state.rdp
 import androidx.compose.remote.creation.compose.state.rf
@@ -57,6 +60,8 @@ import androidx.compose.remote.foundation.icon.RemoteBasicIcon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PaintingStyle
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +71,7 @@ import dev.daw.weightwatcher.WeightGlanceWidget
 import dev.daw.weightwatcher.widget.WidgetClickAction
 import dev.daw.weightwatcher.widget.WidgetItemState
 import dev.daw.weightwatcher.widget.WidgetState
+import dev.daw.weightwatcher.widget.loadAppBadgeBitmap
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
@@ -74,6 +80,7 @@ import kotlinx.coroutines.withContext
 
 private const val FIRST_CLICK_ACTION_ID = 1
 private const val WIDGETS_V7_API_LEVEL = 7L
+private const val BADGE_RING_PADDING_DP = 1
 
 /**
  * Selects the RemoteCompose widget [Profile] matching the OS player's wire version: `WIDGETS_V6` on
@@ -136,7 +143,7 @@ internal suspend fun captureWidgetDocumentBytes(
 ): ByteArray =
   withContext(Dispatchers.Main.immediate) {
     captureSingleRemoteDocument(context = context, profile = profile) {
-        RemoteWidgetCard(state = state)
+        RemoteWidgetCard(context = context, state = state)
       }
       .bytes
   }
@@ -147,6 +154,7 @@ private class RemoteTileVisuals(
   val iconTint: RemoteColor,
   val activeLabels: List<Pair<RemoteString, RemoteInt>>?,
   val staticLabelText: RemoteString?,
+  val badgeBitmap: RemoteImageBitmap? = null,
 )
 
 @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -154,7 +162,7 @@ private class RemoteTileVisuals(
 @Suppress("RestrictedApi")
 @Composable
 @RemoteComposable
-private fun RemoteWidgetCard(state: WidgetState) {
+private fun RemoteWidgetCard(context: Context, state: WidgetState) {
   val hasActiveTile: Boolean =
     state is WidgetState.Configured && state.items.any { it is WidgetItemState.Active }
   // Include a zero-valued FLOAT_TIME_IN_MIN term when any tile is active so
@@ -168,12 +176,13 @@ private fun RemoteWidgetCard(state: WidgetState) {
     } else {
       0f.rf
     }
-  val surfaceContainerColor: RemoteColor =
+  val surfaceContainerBaseColour: RemoteColor =
     resolveWidgetColor(
-        lightColorRes = android.R.color.system_surface_container_light,
-        darkColorRes = android.R.color.system_surface_container_dark,
-      )
-      .copy(alpha = 0.8f.rf + minuteHeartbeat)
+      lightColorRes = android.R.color.system_surface_container_light,
+      darkColorRes = android.R.color.system_surface_container_dark,
+    )
+  val surfaceContainerColor: RemoteColor =
+    surfaceContainerBaseColour.copy(alpha = 0.8f.rf + minuteHeartbeat)
   val primaryColor: RemoteColor =
     resolveWidgetColor(
       lightColorRes = android.R.color.system_primary_light,
@@ -194,6 +203,20 @@ private fun RemoteWidgetCard(state: WidgetState) {
       lightColorRes = android.R.color.system_on_surface_variant_light,
       darkColorRes = android.R.color.system_on_surface_variant_dark,
     )
+  val badgeBitmapsByPackage: Map<String, RemoteImageBitmap> =
+    if (state is WidgetState.Configured) {
+      state.items
+        .asSequence()
+        .filterIsInstance<WidgetItemState.Active>()
+        .mapNotNull { it.originPackage }
+        .distinct()
+        .mapNotNull { pkg ->
+          loadAppBadgeBitmap(context, pkg)?.let { bitmap -> pkg to bitmap.asImageBitmap().rb }
+        }
+        .toMap()
+    } else {
+      emptyMap()
+    }
   val cornerRadius = dimensionResource(android.R.dimen.system_app_widget_background_radius).rdp
   val shape = RemoteRoundedCornerShape(cornerRadius)
   val tiles: List<RemoteTileVisuals> =
@@ -215,6 +238,7 @@ private fun RemoteWidgetCard(state: WidgetState) {
             primaryColor = primaryColor,
             errorColor = errorColor,
             onSurfaceVariantColor = onSurfaceVariantColor,
+            badgeBitmapsByPackage = badgeBitmapsByPackage,
           )
         }
     }
@@ -255,10 +279,17 @@ private fun RemoteWidgetCard(state: WidgetState) {
         if (tile.activeLabels != null) {
           HoistDynamicExpressions(listOf(tile))
         }
-        RemoteTileContent(tile = tile, iconSize = 32.rdp, onSurfaceColor = onSurfaceColor)
+        RemoteTileContent(
+          tile = tile,
+          iconSize = 32.rdp,
+          badgeSizeDp = 14,
+          badgeRingColour = surfaceContainerBaseColour,
+          onSurfaceColor = onSurfaceColor,
+        )
       }
     } else {
       val iconSize: RemoteDp = if (tiles.size <= 3) 28.rdp else 24.rdp
+      val badgeSizeDp: Int = if (tiles.size <= 3) 12 else 10
       RemoteColumn(
         modifier = cardBackgroundModifier.padding(horizontal = 4.rdp, vertical = 8.rdp)
       ) {
@@ -279,7 +310,13 @@ private fun RemoteWidgetCard(state: WidgetState) {
               verticalArrangement = RemoteArrangement.Center,
               horizontalAlignment = RemoteAlignment.CenterHorizontally,
             ) {
-              RemoteTileContent(tile = tile, iconSize = iconSize, onSurfaceColor = onSurfaceColor)
+              RemoteTileContent(
+                tile = tile,
+                iconSize = iconSize,
+                badgeSizeDp = badgeSizeDp,
+                badgeRingColour = surfaceContainerBaseColour,
+                onSurfaceColor = onSurfaceColor,
+              )
             }
           }
         }
@@ -293,6 +330,7 @@ private fun buildTileVisuals(
   primaryColor: RemoteColor,
   errorColor: RemoteColor,
   onSurfaceVariantColor: RemoteColor,
+  badgeBitmapsByPackage: Map<String, RemoteImageBitmap>,
 ): RemoteTileVisuals =
   when (item) {
     is WidgetItemState.Syncing ->
@@ -331,6 +369,7 @@ private fun buildTileVisuals(
           ),
         activeLabels = buildActiveStalenessLabels(elapsed),
         staticLabelText = null,
+        badgeBitmap = item.originPackage?.let(badgeBitmapsByPackage::get),
       )
     }
   }
@@ -360,14 +399,62 @@ private fun HoistDynamicExpressions(tiles: List<RemoteTileVisuals>) {
 private fun RemoteTileContent(
   tile: RemoteTileVisuals,
   iconSize: RemoteDp,
+  badgeSizeDp: Int,
+  badgeRingColour: RemoteColor,
   onSurfaceColor: RemoteColor,
 ) {
-  RemoteBasicIcon(
-    imageVector = RemoteImageVector.vectorResource(tile.iconRes),
-    contentDescription = tile.contentDescription.rs,
-    modifier = RemoteModifier.size(iconSize),
-    tint = tile.iconTint,
-  )
+  if (tile.badgeBitmap != null) {
+    val ringSizeDp: Int = badgeSizeDp + BADGE_RING_PADDING_DP * 2
+    val ringRadius: RemoteDp = (ringSizeDp / 2).rdp
+    RemoteBox(
+      modifier = RemoteModifier.size(iconSize),
+      contentAlignment = RemoteAlignment.BottomStart,
+    ) {
+      RemoteBasicIcon(
+        imageVector = RemoteImageVector.vectorResource(tile.iconRes),
+        contentDescription = tile.contentDescription.rs,
+        modifier = RemoteModifier.size(iconSize),
+        tint = tile.iconTint,
+      )
+      RemoteBox(
+        modifier =
+          RemoteModifier.size(ringSizeDp.rdp)
+            .drawWithContent {
+              val radiusPx = ringRadius.toPx()
+              drawRoundRect(
+                paint =
+                  RemotePaint {
+                    isAntiAlias = true
+                    style = PaintingStyle.Fill
+                    color = badgeRingColour
+                  },
+                topLeft = RemoteOffset(0f.rf, 0f.rf),
+                size = size,
+                cornerRadius = RemoteOffset(radiusPx, radiusPx),
+              )
+              usePaint(RemotePaint()) {}
+              drawContent()
+            }
+            .clip(RemoteRoundedCornerShape(ringRadius)),
+        contentAlignment = RemoteAlignment.Center,
+      ) {
+        RemoteImage(
+          bitmap = tile.badgeBitmap,
+          contentDescription = null,
+          modifier = RemoteModifier.size(badgeSizeDp.rdp),
+          contentScale = ContentScale.Fit,
+          alpha = 1f.rf,
+        )
+      }
+    }
+  } else {
+    RemoteBasicIcon(
+      imageVector = RemoteImageVector.vectorResource(tile.iconRes),
+      contentDescription = tile.contentDescription.rs,
+      modifier = RemoteModifier.size(iconSize),
+      tint = tile.iconTint,
+    )
+  }
   RemoteBox(modifier = RemoteModifier.height(4.rdp))
   val activeLabels: List<Pair<RemoteString, RemoteInt>>? = tile.activeLabels
   val staticLabelText: RemoteString? = tile.staticLabelText

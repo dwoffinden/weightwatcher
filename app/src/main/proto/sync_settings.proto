@@ -20,6 +20,7 @@ message DataTypeState {
   string changes_token = 1;
   .google.protobuf.Timestamp last_record_time = 2;
   Status status = 3;
+  string last_record_origin_package = 4;
 }
 
 message SyncSettings {

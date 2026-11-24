@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
  <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+ <queries>
+  <intent>
+   <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+   <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+  </intent>
+  <intent>
+   <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+  </intent>
+ </queries>
  <application
         android:name=".WeightWatcherApplication"
         android:allowBackup="true"

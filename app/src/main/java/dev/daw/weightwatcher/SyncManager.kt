@@ -40,8 +40,6 @@ import java.time.Instant
 import java.util.EnumMap
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.comparisons.naturalOrder
-import kotlin.comparisons.nullsFirst
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.reflect.KClass
 import kotlinx.coroutines.NonCancellable
@@ -66,21 +64,29 @@ constructor(
   private val widgetUpdater: WidgetUpdater,
   private val activeDataTypesProvider: ActiveDataTypesProvider,
 ) {
+  internal data class LatestRecord(val time: Instant, val originPackage: String)
+
   companion object {
     /** Returns the Health Connect permissions needed to sync [dataType] in the background. */
     fun requiredPermissionsFor(dataType: DataType): Set<String> =
       setOf(dataType.readPermission, HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
 
-    fun getLatestRecordTimeFromChanges(
+    internal fun getLatestRecordFromChanges(
       changes: List<Change>,
       recordClass: KClass<out Record>,
-    ): Instant? =
+    ): LatestRecord? =
       changes
         .asSequence()
         .filterIsInstance<UpsertionChange>()
         .map { it.record }
         .filter { recordClass.isInstance(it) }
-        .maxOfOrNull { recordTime(it) }
+        .maxByOrNull { recordTime(it) }
+        ?.let { record ->
+          LatestRecord(
+            time = recordTime(record),
+            originPackage = record.metadata.dataOrigin.packageName,
+          )
+        }
 
     /**
      * Returns when [record] was taken: the instant of an instantaneous record, or the end of an
@@ -237,25 +243,19 @@ constructor(
     val recordClass: KClass<out Record> = dataType.recordClass
     val nextToken: String =
       healthConnectClient.getChangesToken(ChangesTokenRequest(recordTypes = setOf(recordClass)))
-    val response =
-      healthConnectClient.readRecords(
-        ReadRecordsRequest(
-          recordClass,
-          timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
-          ascendingOrder = false,
-          pageSize = 1,
-        )
-      )
-    val lastRecordTime: Instant? =
-      if (response.records.isEmpty()) {
+    val fetched: LatestRecord? = fetchLatestRecord(healthConnectClient, recordClass)
+    val latestRecord: LatestRecord? =
+      if (fetched == null) {
         Log.i("SyncManager", "Initial load for $dataType found no records")
-        state.lastRecordTimeOrNull?.toInstant()
+        state.toLatestRecordOrNull()
       } else {
-        val time: Instant = recordTime(response.records.single())
-        Log.i("SyncManager", "Initial load for $dataType found record at $time")
-        time
+        Log.i(
+          "SyncManager",
+          "Initial load for $dataType found record at ${fetched.time} from ${fetched.originPackage}",
+        )
+        fetched
       }
-    return syncedState(state, nextToken, lastRecordTime)
+    return syncedState(state, nextToken, latestRecord)
   }
 
   private suspend fun fetchDeltaState(
@@ -265,7 +265,7 @@ constructor(
     initialToken: String,
   ): DataTypeState? {
     val recordClass: KClass<out Record> = dataType.recordClass
-    var lastRecordTime: Instant? = state.lastRecordTimeOrNull?.toInstant()
+    var latestRecord: LatestRecord? = state.toLatestRecordOrNull()
     var currentToken: String = initialToken
     do {
       val changesResponse: ChangesResponse = healthConnectClient.getChanges(currentToken)
@@ -275,24 +275,68 @@ constructor(
 
       Log.i("SyncManager", "Fetched ${changesResponse.changes.size} changes for $dataType")
 
-      val latestFromChanges: Instant? =
-        getLatestRecordTimeFromChanges(changesResponse.changes, recordClass)
-      lastRecordTime = maxOf(lastRecordTime, latestFromChanges, nullsFirst(naturalOrder()))
+      val latestFromChanges: LatestRecord? =
+        getLatestRecordFromChanges(changesResponse.changes, recordClass)
+      if (
+        latestFromChanges != null &&
+          (latestRecord == null || latestFromChanges.time >= latestRecord.time)
+      ) {
+        latestRecord = latestFromChanges
+      }
       currentToken = changesResponse.nextChangesToken
     } while (changesResponse.hasMore)
-    return syncedState(state, currentToken, lastRecordTime)
+
+    // One-time backfill for data types synced before last_record_origin_package existed.
+    if (latestRecord != null && latestRecord.originPackage.isEmpty()) {
+      val backfilled: LatestRecord? = fetchLatestRecord(healthConnectClient, recordClass)
+      if (backfilled != null && backfilled.originPackage.isNotEmpty()) {
+        latestRecord =
+          LatestRecord(
+            time = maxOf(latestRecord.time, backfilled.time),
+            originPackage = backfilled.originPackage,
+          )
+      }
+    }
+    return syncedState(state, currentToken, latestRecord)
+  }
+
+  private suspend fun fetchLatestRecord(
+    healthConnectClient: HealthConnectClient,
+    recordClass: KClass<out Record>,
+  ): LatestRecord? {
+    val response =
+      healthConnectClient.readRecords(
+        ReadRecordsRequest(
+          recordClass,
+          timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+          ascendingOrder = false,
+          pageSize = 1,
+        )
+      )
+    val record: Record = response.records.singleOrNull() ?: return null
+    return LatestRecord(
+      time = recordTime(record),
+      originPackage = record.metadata.dataOrigin.packageName,
+    )
+  }
+
+  private fun DataTypeState.toLatestRecordOrNull(): LatestRecord? {
+    val time: Instant = lastRecordTimeOrNull?.toInstant() ?: return null
+    return LatestRecord(time = time, originPackage = lastRecordOriginPackage)
   }
 
   private fun syncedState(
     state: DataTypeState,
     nextToken: String,
-    lastRecordTimeInstant: Instant?,
+    latestRecord: LatestRecord?,
   ): DataTypeState = state.copy {
     changesToken = nextToken
-    if (lastRecordTimeInstant != null) {
-      lastRecordTime = lastRecordTimeInstant.toTimestamp()
+    if (latestRecord != null) {
+      lastRecordTime = latestRecord.time.toTimestamp()
+      lastRecordOriginPackage = latestRecord.originPackage
     } else {
       clearLastRecordTime()
+      clearLastRecordOriginPackage()
     }
     status = Status.OK
   }

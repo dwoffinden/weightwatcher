@@ -53,8 +53,11 @@ internal sealed interface WidgetItemState {
     override val clickAction: WidgetClickAction = WidgetClickAction.Refresh
   }
 
-  data class Active(override val dataType: DataType, val lastRecordTime: Instant) :
-    WidgetItemState {
+  data class Active(
+    override val dataType: DataType,
+    val lastRecordTime: Instant,
+    val originPackage: String? = null,
+  ) : WidgetItemState {
     override val iconRes: Int = dataType.iconRes
     override val contentDescription: String = dataType.displayName
     override val clickAction: WidgetClickAction = WidgetClickAction.Refresh
@@ -98,11 +101,12 @@ private fun resolveWidgetItemState(
   val typeState: DataTypeState = settings.stateFor(dataType) ?: DataTypeState.getDefaultInstance()
   val hasPermissions: Boolean = typeState.status != Status.NO_PERMISSIONS
   val lastRecordTime: Instant? = typeState.lastRecordTimeOrNull?.toInstant()
+  val originPackage: String? = typeState.lastRecordOriginPackage.takeIf { it.isNotEmpty() }
   return when {
     WeightGlanceWidget.isSyncing(typeState.status, isSyncRunning) ->
       WidgetItemState.Syncing(dataType, hasPermissions)
     !hasPermissions -> WidgetItemState.Unauthorized(dataType)
     lastRecordTime == null -> WidgetItemState.NoRecords(dataType)
-    else -> WidgetItemState.Active(dataType, lastRecordTime)
+    else -> WidgetItemState.Active(dataType, lastRecordTime, originPackage)
   }
 }

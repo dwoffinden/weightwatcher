@@ -6,6 +6,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.drawable.BitmapDrawable
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
@@ -38,10 +40,12 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlinx.coroutines.runBlocking
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestParameterInjector
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -62,6 +66,25 @@ class WidgetScreenshotTest {
   }
 
   private val context: Context = ApplicationProvider.getApplicationContext()
+
+  @Before
+  fun setUp() {
+    val packageManager = shadowOf(context.packageManager)
+    packageManager.setApplicationIcon(
+      PACKAGE_FITBIT,
+      createFakeAppIcon(
+        backgroundColour = Color.rgb(0x00, 0xB0, 0xB9),
+        foregroundColour = Color.WHITE,
+      ),
+    )
+    packageManager.setApplicationIcon(
+      PACKAGE_STRAVA,
+      createFakeAppIcon(
+        backgroundColour = Color.rgb(0xFC, 0x4C, 0x02),
+        foregroundColour = Color.WHITE,
+      ),
+    )
+  }
 
   @Test
   fun glance_light(@TestParameter scenario: VisualScenario) =
@@ -235,7 +258,11 @@ class WidgetScreenshotTest {
         // Add 10s buffer past 20m so truncation stays on 20m even if wall clock ticks slightly.
         WidgetState.Configured(
           listOf(
-            WidgetItemState.Active(DataType.WEIGHT, lastRecordTime = now - 20.minutes - 10.seconds)
+            WidgetItemState.Active(
+              DataType.WEIGHT,
+              lastRecordTime = now - 20.minutes - 10.seconds,
+              originPackage = PACKAGE_FITBIT,
+            )
           )
         )
       VisualScenario.ACTIVE_2H ->
@@ -247,7 +274,11 @@ class WidgetScreenshotTest {
       VisualScenario.STALE_24H ->
         WidgetState.Configured(
           listOf(
-            WidgetItemState.Active(DataType.WEIGHT, lastRecordTime = now - 24.hours - 10.seconds)
+            WidgetItemState.Active(
+              DataType.WEIGHT,
+              lastRecordTime = now - 24.hours - 10.seconds,
+              originPackage = PACKAGE_STRAVA,
+            )
           )
         )
       VisualScenario.SYNCING ->
@@ -261,19 +292,36 @@ class WidgetScreenshotTest {
       VisualScenario.MULTI_3_2X1 ->
         WidgetState.Configured(
           listOf(
-            WidgetItemState.Active(DataType.WEIGHT, lastRecordTime = now - 20.minutes - 10.seconds),
-            WidgetItemState.Active(DataType.STEPS, lastRecordTime = now - 24.hours - 10.seconds),
+            WidgetItemState.Active(
+              DataType.WEIGHT,
+              lastRecordTime = now - 20.minutes - 10.seconds,
+              originPackage = PACKAGE_FITBIT,
+            ),
+            WidgetItemState.Active(
+              DataType.STEPS,
+              lastRecordTime = now - 24.hours - 10.seconds,
+              originPackage = PACKAGE_STRAVA,
+            ),
             WidgetItemState.Unauthorized(DataType.SLEEP),
           )
         )
       VisualScenario.MULTI_5_3X1 ->
         WidgetState.Configured(
           listOf(
-            WidgetItemState.Active(DataType.WEIGHT, lastRecordTime = now - 20.minutes - 10.seconds),
-            WidgetItemState.Active(DataType.STEPS, lastRecordTime = now - 2.hours - 10.seconds),
+            WidgetItemState.Active(
+              DataType.WEIGHT,
+              lastRecordTime = now - 20.minutes - 10.seconds,
+              originPackage = PACKAGE_FITBIT,
+            ),
+            WidgetItemState.Active(
+              DataType.STEPS,
+              lastRecordTime = now - 2.hours - 10.seconds,
+              originPackage = PACKAGE_STRAVA,
+            ),
             WidgetItemState.Active(
               DataType.HEART_RATE,
               lastRecordTime = now - 24.hours - 10.seconds,
+              originPackage = PACKAGE_FITBIT,
             ),
             WidgetItemState.NoRecords(DataType.SLEEP),
             WidgetItemState.Syncing(DataType.HYDRATION, hasPermissions = true),
@@ -281,10 +329,22 @@ class WidgetScreenshotTest {
         )
     }
 
+  private fun createFakeAppIcon(backgroundColour: Int, foregroundColour: Int): BitmapDrawable {
+    val sizePx = 64
+    val bitmap: Bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    canvas.drawColor(backgroundColour)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = foregroundColour }
+    canvas.drawCircle(sizePx / 2f, sizePx / 2f, sizePx / 4.5f, paint)
+    return BitmapDrawable(context.resources, bitmap)
+  }
+
   private companion object {
     val FIXED_NOW: Instant = Instant.parse("2026-01-01T12:00:00Z")
     const val WIDGET_CELL_SIZE_DP = 88
     const val FRAME_PADDING_DP = 16
     val FRAME_BACKGROUND_COLOR: Int = Color.rgb(0x78, 0x78, 0x78)
+    const val PACKAGE_FITBIT = "com.example.fitbit"
+    const val PACKAGE_STRAVA = "com.example.strava"
   }
 }

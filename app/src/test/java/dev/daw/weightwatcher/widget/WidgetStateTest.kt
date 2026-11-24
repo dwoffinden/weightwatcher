@@ -122,6 +122,7 @@ class WidgetStateTest {
             dataTypeState {
               status = Status.OK
               this.lastRecordTime = lastRecordTime.toTimestamp()
+              lastRecordOriginPackage = "com.example.fitbit"
             }
         )
       )
@@ -135,11 +136,43 @@ class WidgetStateTest {
         isSyncRunning = false,
       )
 
-    val expectedItem = WidgetItemState.Active(DataType.WEIGHT, lastRecordTime)
+    val expectedItem =
+      WidgetItemState.Active(DataType.WEIGHT, lastRecordTime, originPackage = "com.example.fitbit")
     assertThat(state).isEqualTo(WidgetState.Configured(listOf(expectedItem)))
     assertThat(expectedItem.iconRes).isEqualTo(DataType.WEIGHT.iconRes)
     assertThat(expectedItem.contentDescription).isEqualTo(DataType.WEIGHT.displayName)
     assertThat(expectedItem.clickAction).isEqualTo(WidgetClickAction.Refresh)
+  }
+
+  @Test
+  fun resolveWidgetState_okWithRecordAndNoOrigin_returnsActiveWithNullOrigin() {
+    val lastRecordTime = Instant.parse("2026-01-01T00:00:00Z")
+    val settings: SyncSettings = syncSettings {
+      setStatesByType(
+        mapOf(
+          DataType.WEIGHT to
+            dataTypeState {
+              status = Status.OK
+              this.lastRecordTime = lastRecordTime.toTimestamp()
+            }
+        )
+      )
+    }
+
+    val state: WidgetState =
+      resolveWidgetState(
+        appWidgetId = 42,
+        dataTypes = ImmutableSet.of(DataType.WEIGHT),
+        settings = settings,
+        isSyncRunning = false,
+      )
+
+    assertThat(state)
+      .isEqualTo(
+        WidgetState.Configured(
+          listOf(WidgetItemState.Active(DataType.WEIGHT, lastRecordTime, originPackage = null))
+        )
+      )
   }
 
   @Test

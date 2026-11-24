@@ -52,28 +52,31 @@ class SyncManagerTest {
   private var activeDataTypes: Set<DataType> = setOf(DataType.WEIGHT)
 
   @Test
-  fun getLatestRecordTimeFromChanges_emptyChanges_returnsNull() {
-    val result: Instant? =
-      SyncManager.getLatestRecordTimeFromChanges(emptyList(), WeightRecord::class)
+  fun getLatestRecordFromChanges_emptyChanges_returnsNull() {
+    val result: SyncManager.LatestRecord? =
+      SyncManager.getLatestRecordFromChanges(emptyList(), WeightRecord::class)
     assertThat(result).isNull()
   }
 
   @Test
-  fun getLatestRecordTimeFromChanges_multipleRecords_returnsNewestTimestamp() =
+  fun getLatestRecordFromChanges_multipleRecords_returnsNewestTimestampAndOrigin() =
     runBlocking<Unit> {
       val token = fakeClient.getChangesToken(ChangesTokenRequest(setOf(WeightRecord::class)))
       val morning = Instant.parse("2026-01-01T10:00:00Z")
       val noon: Instant = morning + 2.hours
       val morningPlusOneHour: Instant = morning + 1.hours
-      fakeClient.insertRecords(
-        listOf(weightRecordAt(morning), weightRecordAt(noon), weightRecordAt(morningPlusOneHour))
-      )
+      fakeClient.setPackageName("com.example.older")
+      fakeClient.insertRecords(listOf(weightRecordAt(morning)))
+      fakeClient.setPackageName("com.example.newest")
+      fakeClient.insertRecords(listOf(weightRecordAt(noon)))
+      fakeClient.setPackageName("com.example.middle")
+      fakeClient.insertRecords(listOf(weightRecordAt(morningPlusOneHour)))
 
       val changesResponse = fakeClient.getChanges(token)
-      val result: Instant? =
-        SyncManager.getLatestRecordTimeFromChanges(changesResponse.changes, WeightRecord::class)
+      val result: SyncManager.LatestRecord? =
+        SyncManager.getLatestRecordFromChanges(changesResponse.changes, WeightRecord::class)
 
-      assertThat(result).isEqualTo(noon)
+      assertThat(result).isEqualTo(SyncManager.LatestRecord(noon, "com.example.newest"))
     }
 
   @Test
@@ -170,6 +173,7 @@ class SyncManagerTest {
               dataTypeState {
                 changesToken = weightState?.changesToken.orEmpty()
                 lastRecordTime = weightTime.toTimestamp()
+                lastRecordOriginPackage = FakeHealthConnectClient.DEFAULT_PACKAGE_NAME
                 status = Status.OK
               },
             DataType.STEPS to dataTypeState { status = Status.NO_PERMISSIONS },
@@ -202,6 +206,7 @@ class SyncManagerTest {
               dataTypeState {
                 changesToken = weightState?.changesToken.orEmpty()
                 lastRecordTime = recordTime.toTimestamp()
+                lastRecordOriginPackage = FakeHealthConnectClient.DEFAULT_PACKAGE_NAME
                 status = Status.OK
               }
           )
@@ -229,6 +234,7 @@ class SyncManagerTest {
               dataTypeState {
                 changesToken = weightState?.changesToken.orEmpty()
                 lastRecordTime = recordTime.toTimestamp()
+                lastRecordOriginPackage = FakeHealthConnectClient.DEFAULT_PACKAGE_NAME
                 status = Status.OK
               }
           )
@@ -240,14 +246,16 @@ class SyncManagerTest {
     }
 
   @Test
-  fun performSync_deltaSyncWithOlderRecord_preservesNewerWeightTime() =
+  fun performSync_deltaSyncWithOlderRecord_preservesNewerWeightTimeAndOrigin() =
     runBlocking<Unit> {
       val initialTime = Instant.parse("2026-01-01T12:00:00Z")
       val olderBackfillTime: Instant = initialTime - 1.hours
+      fakeClient.setPackageName("com.example.primary")
       fakeClient.insertRecords(listOf(weightRecordAt(initialTime)))
       val dataStore = createDataStore()
       val syncManager = createSyncManager(dataStore)
       syncManager.performSync()
+      fakeClient.setPackageName("com.example.backfill")
       fakeClient.insertRecords(listOf(weightRecordAt(olderBackfillTime)))
 
       val result: Result<Unit> = syncManager.performSync()
@@ -263,10 +271,61 @@ class SyncManagerTest {
               dataTypeState {
                 changesToken = weightState?.changesToken.orEmpty()
                 lastRecordTime = initialTime.toTimestamp()
+                lastRecordOriginPackage = "com.example.primary"
                 status = Status.OK
               }
           )
         )
+    }
+
+  @Test
+  fun performSync_deltaSyncWithNewerRecordFromOtherApp_updatesOriginPackage() =
+    runBlocking<Unit> {
+      val initialTime = Instant.parse("2026-01-01T12:00:00Z")
+      val newerTime: Instant = initialTime + 1.hours
+      fakeClient.setPackageName("com.example.first")
+      fakeClient.insertRecords(listOf(weightRecordAt(initialTime)))
+      val dataStore = createDataStore()
+      val syncManager = createSyncManager(dataStore)
+      syncManager.performSync()
+      fakeClient.setPackageName("com.example.second")
+      fakeClient.insertRecords(listOf(weightRecordAt(newerTime)))
+
+      val result: Result<Unit> = syncManager.performSync()
+
+      assertThat(result.isSuccess).isTrue()
+      val weightState: DataTypeState? = dataStore.data.first().stateFor(DataType.WEIGHT)
+      assertThat(weightState?.lastRecordTime).isEqualTo(newerTime.toTimestamp())
+      assertThat(weightState?.lastRecordOriginPackage).isEqualTo("com.example.second")
+    }
+
+  @Test
+  fun performSync_deltaSyncMissingOriginPackage_backfillsOriginFromLatestRecord() =
+    runBlocking<Unit> {
+      val initialTime = Instant.parse("2026-01-01T12:00:00Z")
+      fakeClient.setPackageName("com.example.scale")
+      fakeClient.insertRecords(listOf(weightRecordAt(initialTime)))
+      val token: String =
+        fakeClient.getChangesToken(ChangesTokenRequest(setOf(WeightRecord::class)))
+      val dataStore = createDataStore()
+      dataStore.updateData {
+        syncSettingsWithStates(
+          DataType.WEIGHT to
+            dataTypeState {
+              changesToken = token
+              lastRecordTime = initialTime.toTimestamp()
+              status = Status.OK
+            }
+        )
+      }
+      val syncManager = createSyncManager(dataStore)
+
+      val result: Result<Unit> = syncManager.performSync()
+
+      assertThat(result.isSuccess).isTrue()
+      val weightState: DataTypeState? = dataStore.data.first().stateFor(DataType.WEIGHT)
+      assertThat(weightState?.lastRecordTime).isEqualTo(initialTime.toTimestamp())
+      assertThat(weightState?.lastRecordOriginPackage).isEqualTo("com.example.scale")
     }
 
   @Test
@@ -300,6 +359,7 @@ class SyncManagerTest {
               dataTypeState {
                 changesToken = weightState?.changesToken.orEmpty()
                 lastRecordTime = secondPageNewestTime.toTimestamp()
+                lastRecordOriginPackage = FakeHealthConnectClient.DEFAULT_PACKAGE_NAME
                 status = Status.OK
               }
           )
@@ -327,6 +387,7 @@ class SyncManagerTest {
             DataType.WEIGHT to
               dataTypeState {
                 lastRecordTime = initialTime.toTimestamp()
+                lastRecordOriginPackage = FakeHealthConnectClient.DEFAULT_PACKAGE_NAME
                 status = Status.OK
               }
           )
@@ -379,6 +440,7 @@ class SyncManagerTest {
               dataTypeState {
                 changesToken = weightState?.changesToken.orEmpty()
                 lastRecordTime = weightTime.toTimestamp()
+                lastRecordOriginPackage = FakeHealthConnectClient.DEFAULT_PACKAGE_NAME
                 status = Status.OK
               },
             DataType.STEPS to dataTypeState { status = Status.OK },

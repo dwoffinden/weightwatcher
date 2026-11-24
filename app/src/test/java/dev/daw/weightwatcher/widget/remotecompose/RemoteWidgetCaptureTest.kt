@@ -5,6 +5,8 @@ import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Parcel
 import android.view.View
 import android.view.View.MeasureSpec
@@ -39,6 +41,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestParameterInjector
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -275,6 +278,46 @@ class RemoteWidgetCaptureTest {
           pastThreshold.bitmap.containsColor(errorColor, yRange = 0 until WIDGET_SIZE_PX / 2)
         )
         .isTrue()
+    }
+
+  @Test
+  @Suppress("RestrictedApi")
+  fun captureWidgetDocumentBytes_withOriginPackage_rendersBadgeBitmapOnBothProfiles() =
+    runBlocking<Unit> {
+      val badgeColour: Int = Color.rgb(0xFC, 0x4C, 0x02)
+      shadowOf(context.packageManager)
+        .setApplicationIcon("com.example.strava", ColorDrawable(badgeColour))
+      val lastRecordTime = Instant.parse("2026-01-01T00:00:00Z")
+      val state =
+        WidgetState.Configured(
+          listOf(
+            WidgetItemState.Active(
+              dataType = DataType.WEIGHT,
+              lastRecordTime = lastRecordTime,
+              originPackage = "com.example.strava",
+            )
+          )
+        )
+
+      val v6Bytes: ByteArray =
+        captureWidgetDocumentBytes(
+          context = context,
+          state = state,
+          profile = RcPlatformProfiles.WIDGETS_V6,
+        )
+      val v7Bytes: ByteArray =
+        captureWidgetDocumentBytes(
+          context = context,
+          state = state,
+          profile = RcPlatformProfiles.WIDGETS_V7,
+        )
+
+      val v6Eval: DocumentEvaluation =
+        evaluateDocument(bytes = v6Bytes, now = lastRecordTime + 20.minutes)
+      val v7Eval: DocumentEvaluation =
+        evaluateDocument(bytes = v7Bytes, now = lastRecordTime + 20.minutes)
+      assertThat(v6Eval.bitmap.containsColor(badgeColour, yRange = 0 until WIDGET_SIZE_PX)).isTrue()
+      assertThat(v7Eval.bitmap.containsColor(badgeColour, yRange = 0 until WIDGET_SIZE_PX)).isTrue()
     }
 
   private fun parcelRoundTrip(remoteViews: RemoteViews): RemoteViews {

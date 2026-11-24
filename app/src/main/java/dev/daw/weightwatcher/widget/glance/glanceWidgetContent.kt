@@ -2,6 +2,7 @@ package dev.daw.weightwatcher.widget.glance
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,6 +27,7 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
@@ -53,6 +55,7 @@ import dev.daw.weightwatcher.toDataTypes
 import dev.daw.weightwatcher.widget.WidgetClickAction
 import dev.daw.weightwatcher.widget.WidgetItemState
 import dev.daw.weightwatcher.widget.WidgetState
+import dev.daw.weightwatcher.widget.loadAppBadgeBitmap
 import dev.daw.weightwatcher.widget.resolveWidgetState
 import java.time.Duration
 import kotlinx.coroutines.flow.Flow
@@ -62,11 +65,15 @@ private val EXTRA_APPWIDGET_ID_KEY: ActionParameters.Key<Int> =
   ActionParameters.Key(AppWidgetManager.EXTRA_APPWIDGET_ID)
 
 private val WIDGET_BACKGROUND_COLOUR: ColorProvider = ColorProvider(R.color.widget_background)
+private val WIDGET_SURFACE_CONTAINER_COLOUR: ColorProvider =
+  ColorProvider(R.color.widget_surface_container)
 private val WIDGET_PRIMARY_COLOUR: ColorProvider = ColorProvider(R.color.widget_primary)
 private val WIDGET_ERROR_COLOUR: ColorProvider = ColorProvider(R.color.widget_error)
 private val WIDGET_ON_SURFACE_COLOUR: ColorProvider = ColorProvider(R.color.widget_on_surface)
 private val WIDGET_ON_SURFACE_VARIANT_COLOUR: ColorProvider =
   ColorProvider(R.color.widget_on_surface_variant)
+
+private val BADGE_RING_PADDING: Dp = 1.dp
 
 internal suspend fun GlanceAppWidget.provideGlanceWidgetContent(
   context: Context,
@@ -144,10 +151,12 @@ internal fun GlanceWidgetContent(
           clock = clock,
           useChronometer = useChronometer,
           iconSize = 32.dp,
+          badgeSize = 14.dp,
           modifier = cardModifier.padding(8.dp).clickable(item.clickAction.toGlanceAction()),
         )
       } else {
         val iconSize: Dp = if (state.items.size <= 3) 28.dp else 24.dp
+        val badgeSize: Dp = if (state.items.size <= 3) 12.dp else 10.dp
         Row(
           modifier = cardModifier.padding(horizontal = 4.dp, vertical = 8.dp),
           verticalAlignment = Alignment.CenterVertically,
@@ -159,6 +168,7 @@ internal fun GlanceWidgetContent(
               clock = clock,
               useChronometer = useChronometer,
               iconSize = iconSize,
+              badgeSize = badgeSize,
               modifier =
                 GlanceModifier.defaultWeight()
                   .fillMaxHeight()
@@ -178,10 +188,17 @@ private fun GlanceWidgetTile(
   clock: AppClock,
   useChronometer: Boolean,
   iconSize: Dp,
+  badgeSize: Dp,
   modifier: GlanceModifier,
 ) {
   val staleness: Duration? =
     if (item is WidgetItemState.Active) clock.instant() - item.lastRecordTime else null
+  val badgeBitmap: Bitmap? =
+    if (item is WidgetItemState.Active && item.originPackage != null) {
+      loadAppBadgeBitmap(context, item.originPackage)
+    } else {
+      null
+    }
   val iconTint: ColorProvider =
     when (item) {
       is WidgetItemState.Syncing,
@@ -200,12 +217,37 @@ private fun GlanceWidgetTile(
     verticalAlignment = Alignment.CenterVertically,
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
-    Image(
-      provider = ImageProvider(item.iconRes),
-      contentDescription = item.contentDescription,
-      colorFilter = ColorFilter.tint(iconTint),
-      modifier = GlanceModifier.size(iconSize),
-    )
+    if (badgeBitmap != null) {
+      val ringSize: Dp = badgeSize + BADGE_RING_PADDING * 2
+      Box(modifier = GlanceModifier.size(iconSize), contentAlignment = Alignment.BottomStart) {
+        Image(
+          provider = ImageProvider(item.iconRes),
+          contentDescription = item.contentDescription,
+          colorFilter = ColorFilter.tint(iconTint),
+          modifier = GlanceModifier.size(iconSize),
+        )
+        Box(
+          modifier =
+            GlanceModifier.size(ringSize)
+              .cornerRadius(ringSize / 2)
+              .background(WIDGET_SURFACE_CONTAINER_COLOUR),
+          contentAlignment = Alignment.Center,
+        ) {
+          Image(
+            provider = ImageProvider(badgeBitmap),
+            contentDescription = null,
+            modifier = GlanceModifier.size(badgeSize),
+          )
+        }
+      }
+    } else {
+      Image(
+        provider = ImageProvider(item.iconRes),
+        contentDescription = item.contentDescription,
+        colorFilter = ColorFilter.tint(iconTint),
+        modifier = GlanceModifier.size(iconSize),
+      )
+    }
     Spacer(modifier = GlanceModifier.height(4.dp))
     if (useChronometer && staleness != null && staleness < WeightGlanceWidget.HOURS_THRESHOLD) {
       AndroidRemoteViews(
