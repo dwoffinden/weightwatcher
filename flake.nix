@@ -27,6 +27,16 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          pngcrushPath = pkgs.lib.makeBinPath [
+            pkgs.bash
+            pkgs.coreutils
+            pkgs.findutils
+            pkgs.pngcrush
+          ];
+          pre-commit-pngcrush = pkgs.writeShellScript "pre-commit-pngcrush" ''
+            export PATH="${pngcrushPath}:$PATH"
+            exec bash scripts/crush_pngs.sh "$@"
+          '';
         in
         git-hooks.lib.${system}.run {
           src = ./.;
@@ -55,6 +65,12 @@
               entry = "${pkgs.buf}/bin/buf format -w app/src/main/proto";
               files = "\\.proto$";
               pass_filenames = false;
+            };
+            pngcrush = {
+              enable = true;
+              name = "pngcrush";
+              entry = "${pre-commit-pngcrush}";
+              files = "\\.png$";
             };
             flint = {
               enable = true;
@@ -153,6 +169,7 @@
               pkgs.ktfmt
               pkgs.xmlformat
               pkgs.buf
+              pkgs.pngcrush
               flint.packages.${system}.default
               pkgs.kotlin-language-server
             ];

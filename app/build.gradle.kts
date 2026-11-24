@@ -200,3 +200,13 @@ androidComponents {
     )
   }
 }
+
+val crushSnapshots =
+  tasks.register<Exec>("crushSnapshots") {
+    workingDir = rootProject.projectDir
+    commandLine("bash", rootProject.file("scripts/crush_pngs.sh").absolutePath)
+  }
+
+tasks
+  .matching { it.name.startsWith("recordRoborazzi") }
+  .configureEach { finalizedBy(crushSnapshots) }
