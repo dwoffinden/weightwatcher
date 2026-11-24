@@ -226,7 +226,7 @@ private fun GlanceWidgetTile(
     when (badgeIcon) {
       is AppIcon.Loaded -> {
         val ringSize: Dp = badgeSize + BADGE_RING_PADDING * 2
-        Box(modifier = GlanceModifier.size(iconSize), contentAlignment = Alignment.BottomStart) {
+        Box(modifier = GlanceModifier.size(iconSize), contentAlignment = Alignment.BottomEnd) {
           Image(
             provider = ImageProvider(item.iconRes),
             contentDescription = item.contentDescription,

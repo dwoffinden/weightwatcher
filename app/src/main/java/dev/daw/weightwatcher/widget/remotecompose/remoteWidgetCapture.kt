@@ -418,7 +418,7 @@ private fun RemoteTileContent(
     val ringRadius: RemoteDp = (ringSizeDp / 2).rdp
     RemoteBox(
       modifier = RemoteModifier.size(iconSize),
-      contentAlignment = RemoteAlignment.BottomStart,
+      contentAlignment = RemoteAlignment.BottomEnd,
     ) {
       RemoteBasicIcon(
         imageVector = RemoteImageVector.vectorResource(tile.iconRes),
