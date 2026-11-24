@@ -9,6 +9,9 @@
   <intent>
    <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
   </intent>
+  <intent>
+   <action android:name="android.health.connect.action.HEALTH_HOME_SETTINGS" />
+  </intent>
  </queries>
  <application
         android:name=".WeightWatcherApplication"

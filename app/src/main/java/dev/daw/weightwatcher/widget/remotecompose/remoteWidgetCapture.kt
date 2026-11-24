@@ -68,10 +68,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import dev.daw.weightwatcher.WeightGlanceWidget
+import dev.daw.weightwatcher.widget.AppBadgeBitmapLoader
+import dev.daw.weightwatcher.widget.AppIcon
 import dev.daw.weightwatcher.widget.WidgetClickAction
 import dev.daw.weightwatcher.widget.WidgetItemState
 import dev.daw.weightwatcher.widget.WidgetState
-import dev.daw.weightwatcher.widget.loadAppBadgeBitmap
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
@@ -112,9 +113,15 @@ internal suspend fun captureWidgetRemoteViews(
   state: WidgetState,
   pendingIntentForAction: (WidgetClickAction) -> PendingIntent,
   profile: Profile = selectWidgetProfile(),
+  badgeLoader: AppBadgeBitmapLoader = AppBadgeBitmapLoader(context),
 ): RemoteViews {
   val bytes: ByteArray =
-    captureWidgetDocumentBytes(context = context, state = state, profile = profile)
+    captureWidgetDocumentBytes(
+      context = context,
+      state = state,
+      profile = profile,
+      badgeLoader = badgeLoader,
+    )
   val drawInstructions = RemoteViews.DrawInstructions.Builder(listOf(bytes)).build()
   return RemoteViews(drawInstructions).apply {
     when (state) {
@@ -140,10 +147,11 @@ internal suspend fun captureWidgetDocumentBytes(
   context: Context,
   state: WidgetState,
   profile: Profile = selectWidgetProfile(),
+  badgeLoader: AppBadgeBitmapLoader = AppBadgeBitmapLoader(context),
 ): ByteArray =
   withContext(Dispatchers.Main.immediate) {
     captureSingleRemoteDocument(context = context, profile = profile) {
-        RemoteWidgetCard(context = context, state = state)
+        RemoteWidgetCard(state = state, badgeLoader = badgeLoader)
       }
       .bytes
   }
@@ -162,7 +170,7 @@ private class RemoteTileVisuals(
 @Suppress("RestrictedApi")
 @Composable
 @RemoteComposable
-private fun RemoteWidgetCard(context: Context, state: WidgetState) {
+private fun RemoteWidgetCard(state: WidgetState, badgeLoader: AppBadgeBitmapLoader) {
   val hasActiveTile: Boolean =
     state is WidgetState.Configured && state.items.any { it is WidgetItemState.Active }
   // Include a zero-valued FLOAT_TIME_IN_MIN term when any tile is active so
@@ -205,13 +213,15 @@ private fun RemoteWidgetCard(context: Context, state: WidgetState) {
     )
   val badgeBitmapsByPackage: Map<String, RemoteImageBitmap> =
     if (state is WidgetState.Configured) {
+      val remoteBitmapByIcon = mutableMapOf<AppIcon.Loaded, RemoteImageBitmap>()
       state.items
         .asSequence()
         .filterIsInstance<WidgetItemState.Active>()
         .mapNotNull { it.originPackage }
         .distinct()
         .mapNotNull { pkg ->
-          loadAppBadgeBitmap(context, pkg)?.let { bitmap -> pkg to bitmap.asImageBitmap().rb }
+          val icon = badgeLoader.load(pkg) as? AppIcon.Loaded ?: return@mapNotNull null
+          pkg to remoteBitmapByIcon.getOrPut(icon) { icon.bitmap.asImageBitmap().rb }
         }
         .toMap()
     } else {

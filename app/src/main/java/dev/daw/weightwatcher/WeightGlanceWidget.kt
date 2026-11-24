@@ -21,6 +21,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import dev.daw.weightwatcher.DataTypeState.Status
+import dev.daw.weightwatcher.widget.AppBadgeBitmapLoader
 import dev.daw.weightwatcher.widget.glance.provideGlanceWidgetContent
 import dev.daw.weightwatcher.widget.remotecompose.updateRemoteComposeWidgets
 import java.time.Duration
@@ -42,6 +43,8 @@ class WeightGlanceWidget : GlanceAppWidget() {
     fun syncSettingsDataStore(): DataStore<SyncSettings>
 
     fun clock(): AppClock
+
+    fun appBadgeBitmapLoader(): AppBadgeBitmapLoader
   }
 
   companion object {
@@ -136,6 +139,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
         appWidgetIds = appWidgetIds,
         dataStore = dependencies.syncSettingsDataStore(),
         isSyncRunning = isSyncRunning,
+        badgeLoader = dependencies.appBadgeBitmapLoader(),
       )
       return
     }
@@ -189,16 +193,21 @@ class WeightGlanceWidget : GlanceAppWidget() {
     appWidgetId: Int,
     glanceId: GlanceId,
     dataStore: DataStore<SyncSettings>? = null,
+    badgeLoader: AppBadgeBitmapLoader? = null,
   ) {
     if (useRemoteCompose()) {
-      val resolvedDataStore: DataStore<SyncSettings> =
-        dataStore
-          ?: EntryPointAccessors.fromApplication<Dependencies>(context).syncSettingsDataStore()
+      val dependencies: Dependencies? =
+        if (dataStore == null || badgeLoader == null) {
+          EntryPointAccessors.fromApplication(context)
+        } else {
+          null
+        }
       updateRemoteComposeWidgets(
         context = context,
         appWidgetIds = intArrayOf(appWidgetId),
-        dataStore = resolvedDataStore,
+        dataStore = dataStore ?: dependencies!!.syncSettingsDataStore(),
         isSyncRunning = WeightWorker.isSyncing(context).first(),
+        badgeLoader = badgeLoader ?: dependencies!!.appBadgeBitmapLoader(),
       )
       return
     }
@@ -209,6 +218,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
     val dependencies: Dependencies = EntryPointAccessors.fromApplication(context)
     val dataStore: DataStore<SyncSettings> = dependencies.syncSettingsDataStore()
     val clock: AppClock = dependencies.clock()
+    val badgeLoader: AppBadgeBitmapLoader = dependencies.appBadgeBitmapLoader()
     val isSyncRunningFlow: Flow<Boolean> = WeightWorker.isSyncing(context)
     val appWidgetId: Int =
       runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }
@@ -220,6 +230,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
         appWidgetIds = intArrayOf(appWidgetId),
         dataStore = dataStore,
         isSyncRunning = isSyncRunningFlow.first(),
+        badgeLoader = badgeLoader,
       )
       return
     }
@@ -230,6 +241,7 @@ class WeightGlanceWidget : GlanceAppWidget() {
       dataStore = dataStore,
       clock = clock,
       isSyncRunningFlow = isSyncRunningFlow,
+      badgeLoader = badgeLoader,
     )
   }
 }

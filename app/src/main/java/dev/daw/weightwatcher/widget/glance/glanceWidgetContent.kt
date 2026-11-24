@@ -2,7 +2,6 @@ package dev.daw.weightwatcher.widget.glance
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
-import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,10 +51,11 @@ import dev.daw.weightwatcher.WidgetConfig
 import dev.daw.weightwatcher.dataTypeActionParameters
 import dev.daw.weightwatcher.minus
 import dev.daw.weightwatcher.toDataTypes
+import dev.daw.weightwatcher.widget.AppBadgeBitmapLoader
+import dev.daw.weightwatcher.widget.AppIcon
 import dev.daw.weightwatcher.widget.WidgetClickAction
 import dev.daw.weightwatcher.widget.WidgetItemState
 import dev.daw.weightwatcher.widget.WidgetState
-import dev.daw.weightwatcher.widget.loadAppBadgeBitmap
 import dev.daw.weightwatcher.widget.resolveWidgetState
 import java.time.Duration
 import kotlinx.coroutines.flow.Flow
@@ -81,6 +81,7 @@ internal suspend fun GlanceAppWidget.provideGlanceWidgetContent(
   dataStore: DataStore<SyncSettings>,
   clock: AppClock,
   isSyncRunningFlow: Flow<Boolean>,
+  badgeLoader: AppBadgeBitmapLoader = AppBadgeBitmapLoader(context),
 ) {
   val initialSettings: SyncSettings = dataStore.data.first()
   val initialIsSyncRunning: Boolean = isSyncRunningFlow.first()
@@ -104,6 +105,7 @@ internal suspend fun GlanceAppWidget.provideGlanceWidgetContent(
       state = state,
       clock = clock,
       useChronometer = isPlacedWidget,
+      badgeLoader = badgeLoader,
     )
   }
 }
@@ -114,6 +116,7 @@ internal fun GlanceWidgetContent(
   state: WidgetState,
   clock: AppClock,
   useChronometer: Boolean,
+  badgeLoader: AppBadgeBitmapLoader = AppBadgeBitmapLoader(context),
 ) {
   val cardModifier: GlanceModifier =
     GlanceModifier.fillMaxSize()
@@ -152,6 +155,7 @@ internal fun GlanceWidgetContent(
           useChronometer = useChronometer,
           iconSize = 32.dp,
           badgeSize = 14.dp,
+          badgeLoader = badgeLoader,
           modifier = cardModifier.padding(8.dp).clickable(item.clickAction.toGlanceAction()),
         )
       } else {
@@ -169,6 +173,7 @@ internal fun GlanceWidgetContent(
               useChronometer = useChronometer,
               iconSize = iconSize,
               badgeSize = badgeSize,
+              badgeLoader = badgeLoader,
               modifier =
                 GlanceModifier.defaultWeight()
                   .fillMaxHeight()
@@ -189,15 +194,16 @@ private fun GlanceWidgetTile(
   useChronometer: Boolean,
   iconSize: Dp,
   badgeSize: Dp,
+  badgeLoader: AppBadgeBitmapLoader,
   modifier: GlanceModifier,
 ) {
   val staleness: Duration? =
     if (item is WidgetItemState.Active) clock.instant() - item.lastRecordTime else null
-  val badgeBitmap: Bitmap? =
+  val badgeIcon: AppIcon =
     if (item is WidgetItemState.Active && item.originPackage != null) {
-      loadAppBadgeBitmap(context, item.originPackage)
+      badgeLoader.load(item.originPackage)
     } else {
-      null
+      AppIcon.Missing
     }
   val iconTint: ColorProvider =
     when (item) {
@@ -217,36 +223,39 @@ private fun GlanceWidgetTile(
     verticalAlignment = Alignment.CenterVertically,
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
-    if (badgeBitmap != null) {
-      val ringSize: Dp = badgeSize + BADGE_RING_PADDING * 2
-      Box(modifier = GlanceModifier.size(iconSize), contentAlignment = Alignment.BottomStart) {
+    when (badgeIcon) {
+      is AppIcon.Loaded -> {
+        val ringSize: Dp = badgeSize + BADGE_RING_PADDING * 2
+        Box(modifier = GlanceModifier.size(iconSize), contentAlignment = Alignment.BottomStart) {
+          Image(
+            provider = ImageProvider(item.iconRes),
+            contentDescription = item.contentDescription,
+            colorFilter = ColorFilter.tint(iconTint),
+            modifier = GlanceModifier.size(iconSize),
+          )
+          Box(
+            modifier =
+              GlanceModifier.size(ringSize)
+                .cornerRadius(ringSize / 2)
+                .background(WIDGET_SURFACE_CONTAINER_COLOUR),
+            contentAlignment = Alignment.Center,
+          ) {
+            Image(
+              provider = ImageProvider(badgeIcon.bitmap),
+              contentDescription = null,
+              modifier = GlanceModifier.size(badgeSize),
+            )
+          }
+        }
+      }
+      AppIcon.Missing -> {
         Image(
           provider = ImageProvider(item.iconRes),
           contentDescription = item.contentDescription,
           colorFilter = ColorFilter.tint(iconTint),
           modifier = GlanceModifier.size(iconSize),
         )
-        Box(
-          modifier =
-            GlanceModifier.size(ringSize)
-              .cornerRadius(ringSize / 2)
-              .background(WIDGET_SURFACE_CONTAINER_COLOUR),
-          contentAlignment = Alignment.Center,
-        ) {
-          Image(
-            provider = ImageProvider(badgeBitmap),
-            contentDescription = null,
-            modifier = GlanceModifier.size(badgeSize),
-          )
-        }
       }
-    } else {
-      Image(
-        provider = ImageProvider(item.iconRes),
-        contentDescription = item.contentDescription,
-        colorFilter = ColorFilter.tint(iconTint),
-        modifier = GlanceModifier.size(iconSize),
-      )
     }
     Spacer(modifier = GlanceModifier.height(4.dp))
     if (useChronometer && staleness != null && staleness < WeightGlanceWidget.HOURS_THRESHOLD) {

@@ -18,6 +18,7 @@ import dev.daw.weightwatcher.SyncSettings
 import dev.daw.weightwatcher.WeightGlanceWidget
 import dev.daw.weightwatcher.getGlanceIdOrNull
 import dev.daw.weightwatcher.putDataType
+import dev.daw.weightwatcher.widget.AppBadgeBitmapLoader
 import dev.daw.weightwatcher.widget.WidgetClickAction
 import dev.daw.weightwatcher.widget.WidgetState
 import dev.daw.weightwatcher.widget.resolveWidgetState
@@ -37,6 +38,7 @@ internal suspend fun updateRemoteComposeWidgets(
   appWidgetIds: IntArray,
   dataStore: DataStore<SyncSettings>,
   isSyncRunning: Boolean,
+  badgeLoader: AppBadgeBitmapLoader = AppBadgeBitmapLoader(context),
 ) {
   if (appWidgetIds.isEmpty()) {
     return
@@ -58,6 +60,7 @@ internal suspend fun updateRemoteComposeWidgets(
         dataTypes = dataTypes,
         settings = settings,
         isSyncRunning = isSyncRunning,
+        badgeLoader = badgeLoader,
       )
     appWidgetManager.updateAppWidget(appWidgetId, remoteViews)
   }
@@ -70,6 +73,7 @@ internal suspend fun buildRemoteComposeWidgetViews(
   dataTypes: ImmutableSet<DataType>,
   settings: SyncSettings,
   isSyncRunning: Boolean,
+  badgeLoader: AppBadgeBitmapLoader = AppBadgeBitmapLoader(context),
 ): RemoteViews {
   val state: WidgetState =
     resolveWidgetState(
@@ -82,6 +86,7 @@ internal suspend fun buildRemoteComposeWidgetViews(
     context = context,
     state = state,
     pendingIntentForAction = { action -> action.toPendingIntent(context) },
+    badgeLoader = badgeLoader,
   )
 }
 
